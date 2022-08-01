@@ -26,8 +26,7 @@
 // #define MIN(a, b) ((a) < (b) ? (a) : (b))
 // #endif
 
-#define disp(A) (std::cout << #A << " = " << (A) << "\n")
-
+namespace Cutil{
 #ifdef VKUI_USE_CONCEPTS
 #include <concepts>
 template <typename T>
@@ -858,7 +857,6 @@ template <typename T, unsigned int W, unsigned int H> std::ostream& operator<<(s
   return os;
 }
 
-namespace MathUtils {
 template <typename T, typename U, unsigned int LEN, unsigned int LEN2> inline _Mat<T, LEN2, LEN> outer_product(const _Vec<T, LEN>& A, const _Vec<U, LEN2>& B) {
   _Mat<T, LEN2, LEN> s;
   for(int i = 0; i < LEN; i++) {
@@ -868,7 +866,6 @@ template <typename T, typename U, unsigned int LEN, unsigned int LEN2> inline _M
   }
   return s;
 }
-}; // namespace MathUtils
 
 
 using Mat2x2 = _Mat<double, 2, 2>;
@@ -1126,3 +1123,5 @@ template <typename T> struct uiVector {
     }
   }
 };
+
+} // namespace Cutil
