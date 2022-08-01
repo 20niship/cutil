@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <vector>
 
-namespace Magi {
+namespace Cutil{
 
 inline bool isPow2(unsigned i) {
   return ((i - 1) & i) == 0;
