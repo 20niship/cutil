@@ -74,7 +74,7 @@ template <typename T = double> inline _Vec<T, 3> RGB2HSV(const Vector3b& col) {
       Hue = 60.0 * (G - B) / (MAX - MIN) + 0;
     else if(MAX == G)
       Hue = 60.0 * (B - R) / (MAX - MIN) + 120.0;
-    else if(MAX == B)
+    else
       Hue = 60.0 * (R - G) / (MAX - MIN) + 240.0;
     if(Hue > 360.0)
       Hue = Hue - 360.0;
