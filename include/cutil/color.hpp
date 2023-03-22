@@ -19,7 +19,7 @@ inline double RGB2H(const Vector3b& col) {
       Hue = 60.0 * (G - B) / (MAX - MIN) + 0;
     else if(MAX == G)
       Hue = 60.0 * (B - R) / (MAX - MIN) + 120.0;
-    else if(MAX == B)
+    else
       Hue = 60.0 * (R - G) / (MAX - MIN) + 240.0;
     if(Hue > 360.0)
       Hue = Hue - 360.0;
@@ -51,7 +51,7 @@ inline double RGB2V(const Vector3b& col) {
   const double G = col[1];
   const double B = col[2];
   double MAX = std::max((std::max(R, G)), B);
-  double MIN = std::min((std::min(R, G)), B);
+  /* double MIN = std::min((std::min(R, G)), B); */
   Value = MAX / 256 * 100;
   return Value;
 }
