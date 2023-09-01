@@ -26,7 +26,7 @@
 // #define MIN(a, b) ((a) < (b) ? (a) : (b))
 // #endif
 
-namespace Cutil{
+namespace Cutil {
 #ifdef VKUI_USE_CONCEPTS
 #include <concepts>
 template <typename T>
@@ -371,9 +371,7 @@ public:
     }
     return s;
   }
-  inline _Vec normalize() const {
-    return (*this) / norm();
-  }
+  inline _Vec normalize() const { return (*this) / norm(); }
   template <typename U> inline _Vec<T, 3> cross(const _Vec<U, 3>& other) const {
     static_assert(LEN == 3);
     _Vec<T, 3> res;
@@ -395,18 +393,10 @@ public:
       value[i] = v;
     }
   }
-  inline void setMax() {
-    all(std::numeric_limits<T>::max());
-  }
-  inline void setMin() {
-    all(std::numeric_limits<T>::min());
-  }
-  inline void zero() {
-    all(0);
-  }
-  inline void ones() {
-    all(1);
-  }
+  inline void setMax() { all(std::numeric_limits<T>::max()); }
+  inline void setMin() { all(std::numeric_limits<T>::min()); }
+  inline void zero() { all(0); }
+  inline void ones() { all(1); }
 };
 
 
@@ -679,9 +669,7 @@ template <typename T, unsigned int W, unsigned int H> struct _Mat {
     }
     return s;
   }
-  template <typename U> inline bool operator!=(const _Mat<U, W, H>& other) const {
-    return !(*this == other);
-  }
+  template <typename U> inline bool operator!=(const _Mat<U, W, H>& other) const { return !(*this == other); }
 
   inline double norm() const {
     double s = 0;
@@ -695,12 +683,8 @@ template <typename T, unsigned int W, unsigned int H> struct _Mat {
       value[i] = v;
     };
   }
-  inline void zeros() {
-    all(0);
-  }
-  inline void ones() {
-    all(1);
-  }
+  inline void zeros() { all(0); }
+  inline void ones() { all(1); }
   inline void identify() {
     for(int i = 0; i < W * H; i++) {
       value[i] = (i % (W + 1) == 0) ? 1 : 0;
@@ -715,21 +699,11 @@ template <typename T, unsigned int W, unsigned int H> struct _Mat {
     }
     return s;
   }
-  inline int size() const {
-    return W * H;
-  }
-  inline int width() const {
-    return W;
-  }
-  inline int height() const {
-    return H;
-  }
-  inline T* begin() const {
-    return &value;
-  }
-  inline T* end() const {
-    return &value + W * H;
-  }
+  inline int size() const { return W * H; }
+  inline int width() const { return W; }
+  inline int height() const { return H; }
+  inline T* begin() const { return &value; }
+  inline T* end() const { return &value + W * H; }
   [[deprecated]] void transpose() const {
     _Mat<T, H, W> tmp(*this);
     int x, y;
@@ -744,12 +718,11 @@ template <typename T, unsigned int W, unsigned int H> struct _Mat {
     for(int x = 0; x < H; x++) {
       for(int y = 0; y < W2; y++) {
         T A = 0;
-        for(int i = 0; i < W; i++) {
-          A += other(i, x) * (*this)(y, i);
-        }
+        for(int i = 0; i < W; i++) A += (*this)(i, x) * other(y, i);
         out(y, x) = A;
       }
     }
+    std::cout << "end!" << std::endl;
     return out;
   }
   template <typename U> _Vec<T, H> operator*(const _Vec<U, W>& other) const {
@@ -786,7 +759,7 @@ template <typename T, unsigned int W, unsigned int H> struct _Mat {
     _Mat<T, W, H> tmp = (*this);
     T buf;
     int i, j, k;
-    //三角行列を作成
+    // 三角行列を作成
     for(i = 0; i < W; i++) {
       for(j = 0; j < W; j++) {
         if(i < j) {
@@ -797,7 +770,7 @@ template <typename T, unsigned int W, unsigned int H> struct _Mat {
         }
       }
     }
-    //対角部分の積
+    // 対角部分の積
     double det = 1.0f;
     for(i = 0; i < W; i++) {
       det *= tmp[i * W + i];
@@ -821,10 +794,10 @@ template <typename T, unsigned int W, unsigned int H> struct _Mat {
     MY_ASSERT(W == H);
     _Mat<T, W, W> inverse;
     _Mat<T, W, H> tmp(*this);
-    float buf;   //一時的なデータを蓄える
-    int i, j, k; //カウンタ
+    float buf;   // 一時的なデータを蓄える
+    int i, j, k; // カウンタ
     for(int i = 0; i < W; i++) inverse[i * (W + 1)] = 1.0;
-    //掃き出し法
+    // 掃き出し法
     for(i = 0; i < W; i++) {
       buf = 1.0f / tmp[i * W + i];
       for(j = 0; j < W; j++) {
