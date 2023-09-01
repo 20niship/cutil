@@ -722,7 +722,6 @@ template <typename T, unsigned int W, unsigned int H> struct _Mat {
         out(y, x) = A;
       }
     }
-    std::cout << "end!" << std::endl;
     return out;
   }
   template <typename U> _Vec<T, H> operator*(const _Vec<U, W>& other) const {
