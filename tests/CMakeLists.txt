@@ -6,6 +6,7 @@ add_executable(tests_main
     test_rect.cpp
     test_vector.cpp
     test_color.cpp
+    test_ref.cpp
 )
 
 # Link doctest header
