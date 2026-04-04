@@ -1,6 +1,6 @@
 #include "doctest.h"
-#include <functional>
 #include <cutil/ref.hpp>
+#include <functional>
 #include <string>
 
 using namespace cutil;
