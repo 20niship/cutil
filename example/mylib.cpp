@@ -1,4 +1,5 @@
 #include <cutil/ref.hpp>
+#include <algorithm>
 #include <cutil/ref_nanobind.hpp>
 #include <cutil/string.hpp>
 #include <cutil/string_nanobind.hpp>
