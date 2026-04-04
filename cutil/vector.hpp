@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <cassert>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <functional>
 #include <initializer_list>
