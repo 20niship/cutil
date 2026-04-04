@@ -109,11 +109,8 @@ public:
 
   // Str を引数に取る関数
   bool contains_text(const Str& text) const { return data.contains(text); }
-
   Str replace_text(const Str& what, const Str& with) const { return data.replace(what, with); }
-
   size_t count_text(const Str& text) const { return data.count(text); }
-
   std::vector<Str> split_text(const Str& delim) const { return data.split(delim); }
 };
 

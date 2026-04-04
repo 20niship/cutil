@@ -338,9 +338,7 @@ public:
     return result;
   }
 
-  [[nodiscard]] Str operator+(const Str& other) const {
-    return operator+(std::string_view(other.c_str()));
-  }
+  [[nodiscard]] Str operator+(const Str& other) const { return operator+(std::string_view(other.c_str())); }
 
   [[nodiscard]] Str operator+(const char* s) const { return operator+(std::string_view(s ? s : "")); }
 
@@ -458,9 +456,7 @@ public:
     if(suffix.size() > size()) return false;
     return std::memcmp(data() + size() - suffix.size(), suffix.data(), suffix.size()) == 0;
   }
-
   [[nodiscard]] bool ends_with(const char* suffix) const noexcept { return ends_with(std::string_view(suffix ? suffix : "")); }
-
   [[nodiscard]] size_t count(std::string_view needle) const noexcept {
     if(needle.empty()) return 0;
     size_t count = 0;
@@ -473,6 +469,11 @@ public:
   }
 
   [[nodiscard]] size_t count(const char* needle) const noexcept { return count(std::string_view(needle ? needle : "")); }
+  [[nodiscard]] size_t count(const Str& needle) const noexcept { return count(std::string_view(needle.c_str())); }
+  // split, replace, trim などの関数は、Str を返すため、
+  [[nodiscard]] std::vector<Str> split(const Str& delim = " ", bool allow_empty = true, size_t maxsplit = 0) const { return split(std::string_view(delim.c_str()), allow_empty, maxsplit); }
+  [[nodiscard]] Str replace(const Str& what, const Str& by) const { return replace(what.c_str(), by.c_str()); }
+  [[nodiscard]] Str replacen(const Str& what, const Str& by) const { return replacen(what.c_str(), by.c_str()); }
 
   // ========== Substr & Slicing ==========
 
