@@ -1,4 +1,5 @@
 #include "doctest.h"
+#include <functional>
 #include <cutil/ref.hpp>
 #include <string>
 
