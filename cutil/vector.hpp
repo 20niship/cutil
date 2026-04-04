@@ -474,7 +474,7 @@ template <typename T, unsigned int W, unsigned int H> struct _Mat {
 
   public:
     CommaInput(_Mat* m_, int i) {
-      m = m_;
+      m     = m_;
       index = i;
     }
     CommaInput& operator,(T v) {
@@ -709,8 +709,8 @@ template <typename T, unsigned int W, unsigned int H> struct _Mat {
     _Mat<T, H, W> tmp(*this);
     int x, y;
     for(int i = 0; i < W * H; i++) {
-      x = i % W;
-      y = i / W;
+      x                = i % W;
+      y                = i / W;
       value[y * W + x] = tmp[x * H + y];
     }
   }
@@ -867,11 +867,11 @@ template <typename T> struct uiVector {
   // Constructors, destructor
   inline uiVector() {
     Size = Capacity = 0;
-    Data = NULL;
+    Data            = NULL;
   }
   inline uiVector(const uiVector<T>& src) {
     Size = Capacity = 0;
-    Data = NULL;
+    Data            = NULL;
     operator=(src);
   }
   inline uiVector<T>& operator=(const uiVector<T>& src) {
@@ -927,14 +927,14 @@ template <typename T> struct uiVector {
   }
   inline void swap(uiVector<T>& rhs) {
     int rhs_size = rhs.Size;
-    rhs.Size = Size;
-    Size = rhs_size;
-    int rhs_cap = rhs.Capacity;
+    rhs.Size     = Size;
+    Size         = rhs_size;
+    int rhs_cap  = rhs.Capacity;
     rhs.Capacity = Capacity;
-    Capacity = rhs_cap;
-    T* rhs_data = rhs.Data;
-    rhs.Data = Data;
-    Data = rhs_data;
+    Capacity     = rhs_cap;
+    T* rhs_data  = rhs.Data;
+    rhs.Data     = Data;
+    Data         = rhs_data;
   }
 
   inline int _grow_capacity(int sz) const {
@@ -962,7 +962,7 @@ template <typename T> struct uiVector {
       std::memcpy(new_data, Data, (size_t)Size * sizeof(T));
       free(Data);
     }
-    Data = new_data;
+    Data     = new_data;
     Capacity = new_capacity;
   }
 
@@ -1021,7 +1021,7 @@ template <typename T> struct uiVector {
   inline T* erase(const T* it, const T* it_last) {
     MY_ASSERT(it >= Data && it < Data + Size && it_last > it && it_last <= Data + Size);
     const ptrdiff_t count = it_last - it;
-    const ptrdiff_t off = it - Data;
+    const ptrdiff_t off   = it - Data;
     memmove(Data + off, Data + off + count, ((size_t)Size - (size_t)off - count) * sizeof(T));
     Size -= (int)count;
     return Data + off;
@@ -1043,14 +1043,14 @@ template <typename T> struct uiVector {
     return Data + off;
   }
   inline bool contains(const T& v) const {
-    const T* data = Data;
+    const T* data     = Data;
     const T* data_end = Data + Size;
     while(data < data_end)
       if(*data++ == v) return true;
     return false;
   }
   inline T* find(const T& v) {
-    T* data = Data;
+    T* data           = Data;
     const T* data_end = Data + Size;
     while(data < data_end)
       if(*data == v)
@@ -1060,7 +1060,7 @@ template <typename T> struct uiVector {
     return data;
   }
   inline const T* find(const T& v) const {
-    const T* data = Data;
+    const T* data     = Data;
     const T* data_end = Data + Size;
     while(data < data_end)
       if(*data == v)

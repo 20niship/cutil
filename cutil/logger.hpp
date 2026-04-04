@@ -91,18 +91,10 @@ struct log_intermediate {
   }
 #endif
 
-  static log_intermediate make_info(const char* s, const size_t l, const char* f) {
-    return log_intermediate(prefix_i, suffix_i, type_i, s, l, f);
-  }
-  static log_intermediate make_debug(const char* s, const size_t l, const char* f) {
-    return log_intermediate(prefix_d, suffix_d, type_d, s, l, f);
-  }
-  static log_intermediate make_warn(const char* s, const size_t l, const char* f) {
-    return log_intermediate(prefix_w, suffix_w, type_w, s, l, f);
-  }
-  static log_intermediate make_error(const char* s, const size_t l, const char* f) {
-    return log_intermediate(prefix_e, suffix_e, type_e, s, l, f);
-  }
+  static log_intermediate make_info(const char* s, const size_t l, const char* f) { return log_intermediate(prefix_i, suffix_i, type_i, s, l, f); }
+  static log_intermediate make_debug(const char* s, const size_t l, const char* f) { return log_intermediate(prefix_d, suffix_d, type_d, s, l, f); }
+  static log_intermediate make_warn(const char* s, const size_t l, const char* f) { return log_intermediate(prefix_w, suffix_w, type_w, s, l, f); }
+  static log_intermediate make_error(const char* s, const size_t l, const char* f) { return log_intermediate(prefix_e, suffix_e, type_e, s, l, f); }
 
   template <typename T> bool operator<<(const T& in) noexcept {
     try {
