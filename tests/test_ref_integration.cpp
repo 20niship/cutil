@@ -1,313 +1,309 @@
 #include "doctest.h"
 #include <cutil/ref.hpp>
+#include <string>
 
 using namespace cutil;
 
 // Example class with Ref support
 class MyObject {
 public:
-    int id;
-    std::string name;
+  int id;
+  std::string name;
 
-    MyObject(int id, const std::string& name) : id(id), name(name) {}
+  MyObject(int id, const std::string& name) : id(id), name(name) {}
 
-    ~MyObject() {}
+  ~MyObject() {}
 
-    void print_info() const {}
+  void print_info() const {}
 
-    std::string get_name() const { return name; }
+  std::string get_name() const { return name; }
 
-    void set_name(const std::string& n) { name = n; }
+  void set_name(const std::string& n) { name = n; }
 };
 
 // Example with enable_ref_from_this
 class MyManagedObject : public enable_ref_from_this<MyManagedObject> {
 public:
-    int value;
+  int value;
 
-    MyManagedObject(int v) : value(v) {}
+  MyManagedObject(int v) : value(v) {}
 
-    ~MyManagedObject() {}
+  ~MyManagedObject() {}
 
-    Ref<MyManagedObject> get_self() { return ref_from_this(); }
+  Ref<MyManagedObject> get_self() { return ref_from_this(); }
 
-    void do_something() {}
+  void do_something() {}
 };
 
 // Example with WeakPtr
 class Observer {
 public:
-    WeakPtr<MyObject> target;
+  WeakPtr<MyObject> target;
 
-    Observer() = default;
+  Observer() = default;
 
-    void observe(const Ref<MyObject>& obj) { target = obj; }
+  void observe(const Ref<MyObject>& obj) { target = obj; }
 
-    bool is_alive() const { return !target.expired(); }
+  bool is_alive() const { return !target.expired(); }
 
-    void check_target() {
-        if (auto obj = target.lock()) {
-            // target is alive
-        }
+  void check_target() {
+    if(auto obj = target.lock()) {
+      // target is alive
     }
+  }
 };
 
 TEST_SUITE("Ref Integration") {
-    TEST_CASE("Basic Ref<T> with class") {
-        {
-            Ref<MyObject> obj = make_ref<MyObject>(1, "TestObj");
-            obj->print_info();
-            CHECK(obj.use_count() == 1);
-        }
+  TEST_CASE("Basic Ref<T> with class") {
+    {
+      Ref<MyObject> obj = make_ref<MyObject>(1, "TestObj");
+      obj->print_info();
+      CHECK(obj.use_count() == 1);
     }
+  }
 
-    TEST_CASE("Ref<T> with multiple references") {
-        {
-            Ref<MyObject> obj1 = make_ref<MyObject>(2, "SharedObj");
-            Ref<MyObject> obj2 = obj1;
-            Ref<MyObject> obj3 = obj1;
+  TEST_CASE("Ref<T> with multiple references") {
+    {
+      Ref<MyObject> obj1 = make_ref<MyObject>(2, "SharedObj");
+      Ref<MyObject> obj2 = obj1;
+      Ref<MyObject> obj3 = obj1;
 
-            CHECK(obj1.use_count() == 3);
-            CHECK(obj2.use_count() == 3);
-            CHECK(obj3.use_count() == 3);
-        }
+      CHECK(obj1.use_count() == 3);
+      CHECK(obj2.use_count() == 3);
+      CHECK(obj3.use_count() == 3);
     }
+  }
 
-    TEST_CASE("enable_ref_from_this basic") {
-        {
-            Ref<MyManagedObject> managed = make_ref<MyManagedObject>(42);
-            managed->do_something();
+  TEST_CASE("enable_ref_from_this basic") {
+    {
+      Ref<MyManagedObject> managed = make_ref<MyManagedObject>(42);
+      managed->do_something();
 
-            Ref<MyManagedObject> self = managed->get_self();
-            CHECK(self.use_count() == 2);
-            CHECK(managed.use_count() == 2);
-            CHECK(self->value == 42);
-        }
+      Ref<MyManagedObject> self = managed->get_self();
+      CHECK(self.use_count() == 2);
+      CHECK(managed.use_count() == 2);
+      CHECK(self->value == 42);
     }
+  }
 
-    TEST_CASE("enable_ref_from_this multiple get_self calls") {
-        {
-            Ref<MyManagedObject> obj = make_ref<MyManagedObject>(100);
+  TEST_CASE("enable_ref_from_this multiple get_self calls") {
+    {
+      Ref<MyManagedObject> obj = make_ref<MyManagedObject>(100);
 
-            Ref<MyManagedObject> self1 = obj->get_self();
-            Ref<MyManagedObject> self2 = obj->get_self();
-            Ref<MyManagedObject> self3 = self1->get_self();
+      Ref<MyManagedObject> self1 = obj->get_self();
+      Ref<MyManagedObject> self2 = obj->get_self();
+      Ref<MyManagedObject> self3 = self1->get_self();
 
-            CHECK(obj.use_count() == 4);
-        }
+      CHECK(obj.use_count() == 4);
     }
+  }
 
-    TEST_CASE("WeakPtr with Observer pattern - alive") {
-        {
-            Observer observer;
+  TEST_CASE("WeakPtr with Observer pattern - alive") {
+    {
+      Observer observer;
 
-            {
-                Ref<MyObject> observable = make_ref<MyObject>(3, "Observable");
-                observer.observe(observable);
+      {
+        Ref<MyObject> observable = make_ref<MyObject>(3, "Observable");
+        observer.observe(observable);
 
-                CHECK(observer.is_alive());
-                observer.check_target();
-            }
+        CHECK(observer.is_alive());
+        observer.check_target();
+      }
 
-            CHECK_FALSE(observer.is_alive());
-            observer.check_target();
-        }
+      CHECK_FALSE(observer.is_alive());
+      observer.check_target();
     }
+  }
 
-    TEST_CASE("WeakPtr lock after object destroyed") {
-        {
-            WeakPtr<MyObject> weak;
+  TEST_CASE("WeakPtr lock after object destroyed") {
+    {
+      WeakPtr<MyObject> weak;
 
-            {
-                Ref<MyObject> obj = make_ref<MyObject>(4, "Temp");
-                weak = obj;
+      {
+        Ref<MyObject> obj = make_ref<MyObject>(4, "Temp");
+        weak              = obj;
 
-                CHECK_FALSE(weak.expired());
+        CHECK_FALSE(weak.expired());
 
-                Ref<MyObject> locked = weak.lock();
-                CHECK(locked != nullptr);
-            }
+        Ref<MyObject> locked = weak.lock();
+        CHECK(locked != nullptr);
+      }
 
-            CHECK(weak.expired());
+      CHECK(weak.expired());
 
-            Ref<MyObject> locked = weak.lock();
-            CHECK(locked == nullptr);
-        }
+      Ref<MyObject> locked = weak.lock();
+      CHECK(locked == nullptr);
     }
+  }
 
-    TEST_CASE("Polymorphic usage (compatible with shared_ptr pattern)") {
-        {
-            Ref<MyManagedObject> holder = make_ref<MyManagedObject>(200);
+  TEST_CASE("Polymorphic usage (compatible with shared_ptr pattern)") {
+    {
+      Ref<MyManagedObject> holder = make_ref<MyManagedObject>(200);
 
-            std::function<Ref<MyManagedObject>(const Ref<MyManagedObject>&)>
-                get_self_func = [](const Ref<MyManagedObject>& obj) {
-                    return obj->get_self();
-                };
+      std::function<Ref<MyManagedObject>(const Ref<MyManagedObject>&)> get_self_func = [](const Ref<MyManagedObject>& obj) { return obj->get_self(); };
 
-            Ref<MyManagedObject> result = get_self_func(holder);
-            CHECK(result.use_count() == 2);
-        }
+      Ref<MyManagedObject> result = get_self_func(holder);
+      CHECK(result.use_count() == 2);
     }
+  }
 
-    TEST_CASE("WeakPtr with enable_ref_from_this") {
-        {
-            Ref<MyManagedObject> obj = make_ref<MyManagedObject>(300);
-            WeakPtr<MyManagedObject> weak = obj->weak_from_this();
+  TEST_CASE("WeakPtr with enable_ref_from_this") {
+    {
+      Ref<MyManagedObject> obj      = make_ref<MyManagedObject>(300);
+      WeakPtr<MyManagedObject> weak = obj->weak_from_this();
 
-            CHECK_FALSE(weak.expired());
+      CHECK_FALSE(weak.expired());
 
-            Ref<MyManagedObject> locked = weak.lock();
-            CHECK(locked != nullptr);
-            CHECK(locked->value == 300);
-        }
+      Ref<MyManagedObject> locked = weak.lock();
+      CHECK(locked != nullptr);
+      CHECK(locked->value == 300);
     }
+  }
 
-    TEST_CASE("Conversion and move semantics (nanobind compatibility)") {
-        {
-            auto create_object = []() -> Ref<MyObject> {
-                return make_ref<MyObject>(5, "CreatedInFunction");
-            };
+  TEST_CASE("Conversion and move semantics (nanobind compatibility)") {
+    {
+      auto create_object = []() -> Ref<MyObject> { return make_ref<MyObject>(5, "CreatedInFunction"); };
 
-            Ref<MyObject> obj = create_object();
-            CHECK(obj.use_count() == 1);
-        }
+      Ref<MyObject> obj = create_object();
+      CHECK(obj.use_count() == 1);
     }
+  }
 
-    TEST_CASE("get() method (nanobind holder interface compatibility)") {
-        {
-            Ref<MyManagedObject> ref = make_ref<MyManagedObject>(400);
-            MyManagedObject* ptr = ref.get();
+  TEST_CASE("get() method (nanobind holder interface compatibility)") {
+    {
+      Ref<MyManagedObject> ref = make_ref<MyManagedObject>(400);
+      MyManagedObject* ptr     = ref.get();
 
-            CHECK(ptr != nullptr);
-            CHECK(ptr->value == 400);
-        }
+      CHECK(ptr != nullptr);
+      CHECK(ptr->value == 400);
     }
+  }
 
-    TEST_CASE("Ref with custom deleter") {
-        {
-            bool deleted = false;
-            auto deleter = [&deleted](MyObject* p) {
-                deleted = true;
-                delete p;
-            };
+  TEST_CASE("Ref with custom deleter") {
+    {
+      bool deleted = false;
+      auto deleter = [&deleted](MyObject* p) {
+        deleted = true;
+        delete p;
+      };
 
-            {
-                Ref<MyObject> ptr(new MyObject(6, "CustomDeleter"), deleter);
-                CHECK_FALSE(deleted);
-            }
-            CHECK(deleted);
-        }
+      {
+        Ref<MyObject> ptr(new MyObject(6, "CustomDeleter"), deleter);
+        CHECK_FALSE(deleted);
+      }
+      CHECK(deleted);
     }
+  }
 
-    TEST_CASE("WeakPtr from Ref construction") {
-        {
-            Ref<MyObject> ref = make_ref<MyObject>(7, "WeakTest");
-            WeakPtr<MyObject> weak(ref);
+  TEST_CASE("WeakPtr from Ref construction") {
+    {
+      Ref<MyObject> ref = make_ref<MyObject>(7, "WeakTest");
+      WeakPtr<MyObject> weak(ref);
 
-            CHECK_FALSE(weak.expired());
-            CHECK(weak.use_count() == 1);
+      CHECK_FALSE(weak.expired());
+      CHECK(weak.use_count() == 1);
 
-            Ref<MyObject> locked = weak.lock();
-            CHECK(locked != nullptr);
-            CHECK(locked->id == 7);
-        }
+      Ref<MyObject> locked = weak.lock();
+      CHECK(locked != nullptr);
+      CHECK(locked->id == 7);
     }
+  }
 
-    TEST_CASE("Multiple weak references from same object") {
-        {
-            Ref<MyObject> obj = make_ref<MyObject>(8, "MultiWeak");
+  TEST_CASE("Multiple weak references from same object") {
+    {
+      Ref<MyObject> obj = make_ref<MyObject>(8, "MultiWeak");
 
-            WeakPtr<MyObject> weak1 = obj;
-            WeakPtr<MyObject> weak2 = obj;
-            WeakPtr<MyObject> weak3 = obj;
+      WeakPtr<MyObject> weak1 = obj;
+      WeakPtr<MyObject> weak2 = obj;
+      WeakPtr<MyObject> weak3 = obj;
 
-            CHECK_FALSE(weak1.expired());
-            CHECK_FALSE(weak2.expired());
-            CHECK_FALSE(weak3.expired());
+      CHECK_FALSE(weak1.expired());
+      CHECK_FALSE(weak2.expired());
+      CHECK_FALSE(weak3.expired());
 
-            auto locked1 = weak1.lock();
-            auto locked2 = weak2.lock();
-            auto locked3 = weak3.lock();
+      auto locked1 = weak1.lock();
+      auto locked2 = weak2.lock();
+      auto locked3 = weak3.lock();
 
-            CHECK(locked1 != nullptr);
-            CHECK(locked2 != nullptr);
-            CHECK(locked3 != nullptr);
-            CHECK(locked1->id == 8);
-        }
+      CHECK(locked1 != nullptr);
+      CHECK(locked2 != nullptr);
+      CHECK(locked3 != nullptr);
+      CHECK(locked1->id == 8);
     }
+  }
 
-    TEST_CASE("enable_ref_from_this after copy assignment") {
-        {
-            Ref<MyManagedObject> obj1 = make_ref<MyManagedObject>(50);
-            Ref<MyManagedObject> obj2 = make_ref<MyManagedObject>(60);
+  TEST_CASE("enable_ref_from_this after copy assignment") {
+    {
+      Ref<MyManagedObject> obj1 = make_ref<MyManagedObject>(50);
+      Ref<MyManagedObject> obj2 = make_ref<MyManagedObject>(60);
 
-            Ref<MyManagedObject> self1 = obj1->get_self();
-            Ref<MyManagedObject> self2 = obj2->get_self();
+      Ref<MyManagedObject> self1 = obj1->get_self();
+      Ref<MyManagedObject> self2 = obj2->get_self();
 
-            CHECK(self1->value == 50);
-            CHECK(self2->value == 60);
-            CHECK(obj1.use_count() == 2);
-            CHECK(obj2.use_count() == 2);
-        }
+      CHECK(self1->value == 50);
+      CHECK(self2->value == 60);
+      CHECK(obj1.use_count() == 2);
+      CHECK(obj2.use_count() == 2);
     }
+  }
 
-    TEST_CASE("WeakPtr copy and move") {
-        {
-            Ref<MyObject> obj = make_ref<MyObject>(9, "WeakCopyMove");
-            WeakPtr<MyObject> weak1 = obj;
+  TEST_CASE("WeakPtr copy and move") {
+    {
+      Ref<MyObject> obj       = make_ref<MyObject>(9, "WeakCopyMove");
+      WeakPtr<MyObject> weak1 = obj;
 
-            // Copy
-            WeakPtr<MyObject> weak2 = weak1;
-            CHECK_FALSE(weak2.expired());
+      // Copy
+      WeakPtr<MyObject> weak2 = weak1;
+      CHECK_FALSE(weak2.expired());
 
-            // Move
-            WeakPtr<MyObject> weak3 = std::move(weak1);
-            CHECK_FALSE(weak3.expired());
+      // Move
+      WeakPtr<MyObject> weak3 = std::move(weak1);
+      CHECK_FALSE(weak3.expired());
 
-            auto locked = weak3.lock();
-            CHECK(locked != nullptr);
-            CHECK(locked->id == 9);
-        }
+      auto locked = weak3.lock();
+      CHECK(locked != nullptr);
+      CHECK(locked->id == 9);
     }
+  }
 
-    TEST_CASE("reset() clears reference") {
-        {
-            Ref<MyObject> obj = make_ref<MyObject>(10, "ResetTest");
-            CHECK(obj != nullptr);
-            CHECK(obj.use_count() == 1);
+  TEST_CASE("reset() clears reference") {
+    {
+      Ref<MyObject> obj = make_ref<MyObject>(10, "ResetTest");
+      CHECK(obj != nullptr);
+      CHECK(obj.use_count() == 1);
 
-            obj.reset();
-            CHECK(obj == nullptr);
-            CHECK(obj.use_count() == 0);
-        }
+      obj.reset();
+      CHECK(obj == nullptr);
+      CHECK(obj.use_count() == 0);
     }
+  }
 
-    TEST_CASE("unique() returns true for single reference") {
-        {
-            Ref<MyObject> obj = make_ref<MyObject>(11, "UniqueTest");
-            CHECK(obj.unique());
+  TEST_CASE("unique() returns true for single reference") {
+    {
+      Ref<MyObject> obj = make_ref<MyObject>(11, "UniqueTest");
+      CHECK(obj.unique());
 
-            Ref<MyObject> obj2 = obj;
-            CHECK_FALSE(obj.unique());
-            CHECK_FALSE(obj2.unique());
+      Ref<MyObject> obj2 = obj;
+      CHECK_FALSE(obj.unique());
+      CHECK_FALSE(obj2.unique());
 
-            obj2.reset();
-            CHECK(obj.unique());
-        }
+      obj2.reset();
+      CHECK(obj.unique());
     }
+  }
 
-    TEST_CASE("swap exchanges pointers") {
-        {
-            Ref<MyObject> obj1 = make_ref<MyObject>(12, "First");
-            Ref<MyObject> obj2 = make_ref<MyObject>(13, "Second");
+  TEST_CASE("swap exchanges pointers") {
+    {
+      Ref<MyObject> obj1 = make_ref<MyObject>(12, "First");
+      Ref<MyObject> obj2 = make_ref<MyObject>(13, "Second");
 
-            int id1 = obj1->id;
-            int id2 = obj2->id;
+      int id1 = obj1->id;
+      int id2 = obj2->id;
 
-            obj1.swap(obj2);
+      obj1.swap(obj2);
 
-            CHECK(obj1->id == id2);
-            CHECK(obj2->id == id1);
-        }
+      CHECK(obj1->id == id2);
+      CHECK(obj2->id == id1);
     }
+  }
 }

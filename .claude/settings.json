@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /Users/nishimac/Desktop/cutil/ext)",
+      "Bash(curl -L https://raw.githubusercontent.com/doctest/doctest/master/doctest/doctest.h -o doctest.h)",
+      "Bash(cmake:*)",
+      "Bash(make clean:*)",
+      "Bash(ctest:*)",
+      "Bash(clang++ -std=c++17 -Wall -Wextra -o test_ref test_ref.cpp)",
+      "Bash(./test_ref)",
+      "Bash(cmake -B build)",
+      "Bash(cmake --build build --target tests_main)",
+      "Bash(./tests_main)",
+      "Bash(/Users/nishimac/Desktop/cutil/build/tests/tests_main:*)",
+      "Bash(clang++ -std=c++17 -fPIC -I./ext/nanobind/include -I. -c example_nanobind.cpp -o example_nanobind.o)",
+      "Bash(mkdir -p /tmp/ref_integration_test)",
+      "Bash(cp /Users/nishimac/Desktop/cutil/test_ref_integration.cpp /tmp/ref_integration_test/)",
+      "Bash(cp /Users/nishimac/Desktop/cutil/CMakeLists_integration.txt /tmp/ref_integration_test/CMakeLists.txt)",
+      "Read(//tmp/**)",
+      "Bash(sed -i 's|${CMAKE_CURRENT_SOURCE_DIR}|/Users/nishimac/Desktop/cutil|g' CMakeLists.txt)",
+      "Bash(/Users/nishimac/Desktop/cutil/build/test_ref_integration:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(git push:*)",
+      "Bash(mkdir -p /tmp/mylib_build)",
+      "Bash(mkdir:*)",
+      "Bash(mv:*)",
+      "Bash(ls -la /Users/nishimac/Desktop/cutil/example/CMakeLists*)",
+      "Bash(mkdir -p build_lib)",
+      "Bash(make:*)",
+      "Bash(python3:*)",
+      "Bash(ninja:*)",
+      "Bash(ninja test:*)"
+    ]
+  }
+}

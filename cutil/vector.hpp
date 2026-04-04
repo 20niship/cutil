@@ -5,14 +5,11 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <functional>
 #include <initializer_list>
 #include <iostream>
 #include <limits>
 #include <math.h>
 #include <string>
-#include <type_traits>
-#include <vector>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare" // May be used uninitialized 'return {};'.
