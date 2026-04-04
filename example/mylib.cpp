@@ -40,6 +40,7 @@ public:
 class DataManager : public enable_ref_from_this<DataManager> {
 private:
   std::string data;
+  int hoge;
 
 public:
   DataManager(const std::string& initial = "") : data(initial) {}
@@ -50,10 +51,10 @@ public:
   }
 
   std::string get_data() const { return data; }
-
   Ref<DataManager> get_self() { return ref_from_this(); }
-
   std::string process() { return "Processing: " + data; }
+  int get_counter() const { return hoge; }
+  void increment() { ++hoge; }
 };
 
 // WeakPtr を使ったObserver
@@ -141,10 +142,24 @@ NB_MODULE(mylib, m) {
     .def_rw("value", &Calculator::value, "Current value");
 
   // DataManager クラス
-  nb::class_<DataManager>(m, "DataManager").def(nb::init<>()).def(nb::init<const std::string&>()).def("set_data", &DataManager::set_data).def("get_data", &DataManager::get_data).def("get_self", &DataManager::get_self, "Get self reference").def("process", &DataManager::process);
+  nb::class_<DataManager>(m, "DataManager") //
+    .def(nb::init<>())
+    .def(nb::init<const std::string&>())
+    .def("set_data", &DataManager::set_data)
+    .def("get_data", &DataManager::get_data)
+    .def("get_self", &DataManager::get_self, "Get self reference")
+    .def("get_self", &DataManager::get_self, "Get self reference")
+    .def("get_counter", &DataManager::get_counter, "Get counter value")
+    .def("increment", &DataManager::increment, "Increment counter")
+    .def("process", &DataManager::process);
 
   // Observer クラス
-  nb::class_<Observer>(m, "Observer").def(nb::init<const std::string&>()).def("attach", &Observer::attach, "Attach to DataManager").def("is_target_alive", &Observer::is_target_alive).def("get_target_data", &Observer::get_target_data).def("get_name", &Observer::get_name);
+  nb::class_<Observer>(m, "Observer") //
+    .def(nb::init<const std::string&>())
+    .def("attach", &Observer::attach, "Attach to DataManager")
+    .def("is_target_alive", &Observer::is_target_alive)
+    .def("get_target_data", &Observer::get_target_data)
+    .def("get_name", &Observer::get_name);
 
   // StringProcessor クラス - Str のデモ
   nb::class_<StringProcessor>(m, "StringProcessor")

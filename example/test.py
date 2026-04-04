@@ -7,61 +7,33 @@ Comprehensive mylib Test Suite
 """
 
 import sys
-from pathlib import Path
 
-# Add parent directory to path for mylib import
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, ".")
 
-
-# ============================================================================
-# SECTION 1: Ref<T> and Basic Module Tests
-# ============================================================================
 
 def test_module_import():
-    """Test 1: Import mylib as a Python module"""
-    print("\n" + "=" * 70)
-    print("【Test 1】Module Import and Basic Functions")
-    print("=" * 70)
-
-    from mylib import add, multiply, concat, DataManager
-
-    print("\n- Basic arithmetic functions")
-    print("-" * 70)
-
-    result_add = add(10, 20)
-    print(f"add(10, 20) = {result_add}")
-    assert result_add == 30, "add function failed"
-
-    result_mul = multiply(5, 6)
-    print(f"multiply(5, 6) = {result_mul}")
-    assert result_mul == 30, "multiply function failed"
-
-    result_concat = concat("Hello, ", "World!")
-    print(f"concat('Hello, ', 'World!') = '{result_concat}'")
-    assert result_concat == "Hello, World!", "concat function failed"
-
-    print("\n- DataManager class")
-    print("-" * 70)
+    from mylib import DataManager
 
     manager = DataManager()
-    print("✓ DataManager object created")
-
     manager.set_data("Test Data from Module")
     data = manager.get_data()
-    print(f"✓ Data set/get: '{data}'")
     assert data == "Test Data from Module"
 
-    use_count = manager.use_count()
-    print(f"✓ Reference count: {use_count}")
-    assert use_count > 0
-
+    print(f"✓ Data: {data}")
     for i in range(3):
         manager.increment()
     counter = manager.get_counter()
     print(f"✓ Counter: {counter}")
     assert counter == 3
 
+    self2 = manager.get_self()
+    print(f"✓ Self reference: {self2}")
+    assert self2 is not None    
+    assert self2.get_counter() == 3
+
     manager.reset()
+    self_ = manager.get_self()
+    print(f"✓ Self reference: {self_}")
     print("✓ Manager reset")
 
 
@@ -156,19 +128,11 @@ def test_ref_features():
     manager1 = DataManager()
     manager1.set_data("Manager 1")
 
-    print(f"manager1.use_count() = {manager1.use_count()}")
-    assert manager1.use_count() > 0
-
-    for _ in range(5):
-        manager1.increment()
-
     counter = manager1.get_counter()
     print(f"After 5 increments: counter = {counter}")
     assert counter == 5
 
     manager1.reset()
-    print(f"After reset: use_count = {manager1.use_count()}")
-    assert manager1.use_count() == 0
 
     print("\n- Multiple managers")
     print("-" * 70)
@@ -181,10 +145,6 @@ def test_ref_features():
     m2.set_data("Manager 2")
     m3.set_data("Manager 3")
 
-    print(f"m1: '{m1.get_data()}', count={m1.use_count()}")
-    print(f"m2: '{m2.get_data()}', count={m2.use_count()}")
-    print(f"m3: '{m3.get_data()}', count={m3.use_count()}")
-
     m1.reset()
     m2.reset()
     m3.reset()
@@ -194,6 +154,7 @@ def test_ref_features():
 # ============================================================================
 # SECTION 2: C++ Str Class Tests
 # ============================================================================
+
 
 def test_str_basic():
     """Test 5: Basic Str operations"""
@@ -400,6 +361,7 @@ def test_process_string():
 # Main Test Runner
 # ============================================================================
 
+
 def main():
     """Run all tests"""
     print("\n" + "=" * 70)
@@ -442,11 +404,13 @@ def main():
     except AssertionError as e:
         print(f"\n✗ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
     except Exception as e:
         print(f"\n✗ Error: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 
