@@ -2,7 +2,6 @@
 
 #include <atomic>
 #include <cstring>
-#include <functional>
 #include <memory>
 #include <utility>
 
