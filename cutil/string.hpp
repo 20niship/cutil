@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -337,7 +338,11 @@ public:
     return result;
   }
 
-  [[nodiscard]] Str operator+(const char* s) const { return operator+(std::string_view(s)); }
+  [[nodiscard]] Str operator+(const Str& other) const {
+    return operator+(std::string_view(other.c_str()));
+  }
+
+  [[nodiscard]] Str operator+(const char* s) const { return operator+(std::string_view(s ? s : "")); }
 
   [[nodiscard]] Str operator+(char c) const {
     Str result(*this);
@@ -579,13 +584,13 @@ public:
 
     Str result;
     size_t last_pos = 0;
-    size_t pos      = self_lower.find(what_lower, last_pos);
+    size_t pos      = self_lower.find(std::string_view(what_lower.c_str()), last_pos);
 
     while(pos != npos) {
       result += substr(last_pos, pos - last_pos);
       result += by;
       last_pos = pos + what.size();
-      pos      = self_lower.find(what_lower, last_pos);
+      pos      = self_lower.find(std::string_view(what_lower.c_str()), last_pos);
     }
     result += substr(last_pos);
     return result;
@@ -892,7 +897,7 @@ public:
         if(!simplified.empty() && simplified.back() != "..") {
           simplified.pop_back();
         } else if(is_relative_path()) {
-          simplified.push_back("..");
+          simplified.push_back(Str(".."));
         }
       } else if(part != "." && !part.empty()) {
         simplified.push_back(part);
@@ -1031,23 +1036,25 @@ private:
   static bool is_char_in(char c, std::string_view charset) noexcept { return charset.find(c) != std::string_view::npos; }
 };
 
+// Standard Library Integration is done at namespace scope (below)
+
+} // namespace cutil
+
 // ============================================================================
 // Standard Library Integration
 // ============================================================================
 
-inline std::ostream& operator<<(std::ostream& os, const Str& s) {
+inline std::ostream& operator<<(std::ostream& os, const cutil::Str& s) {
   os << s.c_str();
   return os;
 }
 
-inline std::istream& operator>>(std::istream& is, Str& s) {
+inline std::istream& operator>>(std::istream& is, cutil::Str& s) {
   std::string tmp;
   is >> tmp;
-  s = Str(tmp);
+  s = cutil::Str(tmp);
   return is;
 }
-
-} // namespace cutil
 
 // Hash specialization
 namespace std {
