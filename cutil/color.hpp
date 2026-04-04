@@ -5,12 +5,12 @@
 namespace Cutil {
 
 inline double RGB2H(const Vector3b& col) {
-  double Hue; //色相
+  double Hue; // 色相
   const double R = col[0];
   const double G = col[1];
   const double B = col[2];
-  double MAX = std::max((std::max(R, G)), B);
-  double MIN = std::min((std::min(R, G)), B);
+  double MAX     = std::max((std::max(R, G)), B);
+  double MIN     = std::min((std::min(R, G)), B);
 
   if(MAX == MIN) {
     Hue = 0;
@@ -30,12 +30,12 @@ inline double RGB2H(const Vector3b& col) {
 }
 
 inline double RGB2S(const Vector3b& col) {
-  double Saturation; //彩度
+  double Saturation; // 彩度
   const double R = col[0];
   const double G = col[1];
   const double B = col[2];
-  double MAX = std::max((std::max(R, G)), B);
-  double MIN = std::min((std::min(R, G)), B);
+  double MAX     = std::max((std::max(R, G)), B);
+  double MIN     = std::min((std::min(R, G)), B);
 
   if(MAX == MIN) {
     Saturation = 0;
@@ -50,7 +50,7 @@ inline double RGB2V(const Vector3b& col) {
   const double R = col[0];
   const double G = col[1];
   const double B = col[2];
-  double MAX = std::max((std::max(R, G)), B);
+  double MAX     = std::max((std::max(R, G)), B);
   /* double MIN = std::min((std::min(R, G)), B); */
   Value = MAX / 256 * 100;
   return Value;
@@ -60,14 +60,14 @@ template <typename T = double> inline _Vec<T, 3> RGB2HSV(const Vector3b& col) {
   const double R = col[0];
   const double G = col[1];
   const double B = col[2];
-  double MAX = std::max((std::max(R, G)), B);
-  double MIN = std::min((std::min(R, G)), B);
+  double MAX     = std::max((std::max(R, G)), B);
+  double MIN     = std::min((std::min(R, G)), B);
 
   double Value, Saturation, Hue;
 
   Value = MAX / 256 * 100;
   if(MAX == MIN) {
-    Hue = 0;
+    Hue        = 0;
     Saturation = 0;
   } else {
     if(MAX == R)

@@ -22,7 +22,7 @@ template <typename T, int LEN = 1024> struct Pool {
     inline iterator& operator++() {
       ++pos;
       if(pos == LEN && chunk->next) {
-        pos = 0;
+        pos   = 0;
         chunk = chunk->next;
       }
       return *this;
@@ -46,15 +46,15 @@ private:
 
 public:
   void init() {
-    beg_m = (Chunk*)malloc(sizeof(Chunk));
+    beg_m       = (Chunk*)malloc(sizeof(Chunk));
     beg_m->next = NULL;
-    end_m = beg_m;
-    chunk_num = 1;
+    end_m       = beg_m;
+    chunk_num   = 1;
   }
 
   void clear() {
     Chunk* cur = beg_m;
-    chunk_num = 1;
+    chunk_num  = 1;
     while(cur != end_m) {
       Chunk* tmp = cur->next;
       free(cur);
@@ -68,7 +68,7 @@ public:
 
   unsigned countElements() {
     unsigned count = 0;
-    Chunk* cur = beg_m;
+    Chunk* cur     = beg_m;
     while(cur != end_m) {
       cur = cur->next;
       count += LEN;
@@ -87,8 +87,8 @@ public:
       assert(chunk != NULL);
       chunk->next = NULL;
       end_m->next = chunk;
-      end_m = chunk;
-      pos_m = 0;
+      end_m       = chunk;
+      pos_m       = 0;
     }
     T* mem = &end_m->items[pos_m];
     ++pos_m;

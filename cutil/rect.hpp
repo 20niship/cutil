@@ -115,10 +115,6 @@ struct Rect {
   static Rect PosSize(float x, float y, float width, float height) { return {Vector2f(x, y), Vector2f(width, height)}; }
   static Rect CenterSize(const Vector2f& c, const Vector2f& s) { return {c - s / 2, c + s / 2}; }
 };
-inline void operator|=(Rect& r1, const Rect& r2) {
-  r1 = r1 | r2;
-}
-inline void operator&=(Rect& r1, const Rect& r2) {
-  r1 = r1 & r2;
-}
+inline void operator|=(Rect& r1, const Rect& r2) { r1 = r1 | r2; }
+inline void operator&=(Rect& r1, const Rect& r2) { r1 = r1 & r2; }
 } // namespace Cutil

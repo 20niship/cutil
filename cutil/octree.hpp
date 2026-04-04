@@ -8,11 +8,9 @@
 #include <stdlib.h>
 #include <vector>
 
-namespace Cutil{
+namespace Cutil {
 
-inline bool isPow2(unsigned i) {
-  return ((i - 1) & i) == 0;
-}
+inline bool isPow2(unsigned i) { return ((i - 1) & i) == 0; }
 
 inline unsigned log2(unsigned n) {
   assert(n != 0);
@@ -57,7 +55,7 @@ public:
     inline Leaves() : values(), size(0) {}
     inline Leaves(const T* v) {
       values[0] = const_cast<T*>(v);
-      size = 1;
+      size      = 1;
     }
     void* operator new(size_t num_bytes, Pool<Leaves>* mem) { /* assert(this->size < LEAF_MAX_N); */
       assert(sizeof(Leaves) == num_bytes);
@@ -127,44 +125,44 @@ public:
     _int3 nearest;            // 現在最も近い点
     _int3 bbox_min, bbox_max; // target_pos からnn_sq_distance + 1 離れた領域。これの中に点群が入っていればNearestになるかも
     SearchMethod method;
-    uint64_t r_sq; //球体中の一覧を取得するときに、この半径**2いないの点群を取得する
+    uint64_t r_sq; // 球体中の一覧を取得するときに、この半径**2いないの点群を取得する
 
     Search() {}
     Search(const _int3 tar, const SearchMethod meth) {
-      method = meth;
-      target_pos = tar;
+      method         = meth;
+      target_pos     = tar;
       nn_sq_distance = std::numeric_limits<uint64_t>::max();
     }
 
     Search(const int x, const int y, const int z, const SearchMethod meth) {
-      method = meth;
-      target_pos = _int3(x, y, z);
+      method         = meth;
+      target_pos     = _int3(x, y, z);
       nn_sq_distance = std::numeric_limits<uint64_t>::max();
     }
 
     // 指定されたLeaveが目的に合ったものかどうかを調べ、もし条件に適している場合はpush_backする
     inline void update_nearest(Leaves* l, const uint64_t x, const uint64_t y, const uint64_t z) {
-      const long dx = target_pos.x - x;
-      const long dy = target_pos.y - y;
-      const long dz = target_pos.z - z;
+      const long dx              = target_pos.x - x;
+      const long dy              = target_pos.y - y;
+      const long dz              = target_pos.z - z;
       const unsigned sq_distance = (dx * dx) + (dy * dy) + (dz * dz);
 
       if(sq_distance < nn_sq_distance) {
         if(nn_leaves.size() == 0) nn_leaves.resize(1);
-        nn_leaves[0] = l;
+        nn_leaves[0]   = l;
         nn_sq_distance = sq_distance;
-        nearest = _int3(x, y, z);
+        nearest        = _int3(x, y, z);
 
         const int r = std::sqrt(sq_distance) + 1.0;
-        bbox_min = target_pos - r;
-        bbox_max = target_pos + r;
+        bbox_min    = target_pos - r;
+        bbox_max    = target_pos + r;
       }
     }
 
     inline void update_volume(Leaves* l, const uint64_t x, const uint64_t y, const uint64_t z) {
-      const long dx = target_pos.x - x;
-      const long dy = target_pos.y - y;
-      const long dz = target_pos.z - z;
+      const long dx              = target_pos.x - x;
+      const long dy              = target_pos.y - y;
+      const long dz              = target_pos.z - z;
       const unsigned sq_distance = (dx * dx) + (dy * dy) + (dz * dz);
       if(sq_distance < r_sq) {
         nn_leaves.push_back(l);
@@ -240,12 +238,8 @@ public:
   Octree2() {}
   ~Octree2() {}
 
-  inline unsigned resolution() const {
-    return 1 << DEPTH;
-  }
-  inline unsigned depth() const {
-    return DEPTH;
-  }
+  inline unsigned resolution() const { return 1 << DEPTH; }
+  inline unsigned depth() const { return DEPTH; }
   inline unsigned capacity() const {
     auto w = resolution();
     return w * w * w;
@@ -258,27 +252,13 @@ public:
     this->zmin = zmin;
     this->zmax = zmax;
   }
-  inline Branch* root() const {
-    return reinterpret_cast<Branch*>(m_root);
-  }
-  inline leaves_iterator leaf_begin() {
-    return leaves_pool.begin();
-  }
-  inline leaves_iterator leaf_end() {
-    return leaves_pool.end();
-  }
-  inline branches_iterator branch_begin() {
-    return branch_pool.begin();
-  }
-  inline branches_iterator branch_end() {
-    return branch_pool.end();
-  }
-  inline unsigned countLeaves() {
-    return leaves_pool.size();
-  }
-  inline unsigned countBranches() {
-    return branch_pool.size();
-  }
+  inline Branch* root() const { return reinterpret_cast<Branch*>(m_root); }
+  inline leaves_iterator leaf_begin() { return leaves_pool.begin(); }
+  inline leaves_iterator leaf_end() { return leaves_pool.end(); }
+  inline branches_iterator branch_begin() { return branch_pool.begin(); }
+  inline branches_iterator branch_end() { return branch_pool.end(); }
+  inline unsigned countLeaves() { return leaves_pool.size(); }
+  inline unsigned countBranches() { return branch_pool.size(); }
 
   // 背景削除に用いる
   // 与えられた点(x, y, z)を含むBox(Depth＝MAX)が存在するか
@@ -292,7 +272,7 @@ public:
     auto b = root();
     for(int _dw = resolution() / 2; _dw > 1; dw << 1) {
       const unsigned idx = !!(bin.x & _dw) * 1 + !!(bin.y & _dw) * 2 + !!(bin.z & _dw) * 4;
-      b = b->children[i & 7];
+      b                  = b->children[i & 7];
       if(n == nullptr) {
         return false;
       }
@@ -322,7 +302,7 @@ public:
     assert(ymax - ymin > 0);
     assert(zmax - zmin > 0);
 
-    Node** n = &m_root;
+    Node** n       = &m_root;
     uint16_t depth = DEPTH;
 
     _int3 bin((x - xmin) * resolution() / (xmax - xmin), (y - ymin) * resolution() / (ymax - ymin), (z - zmin) * resolution() / (zmax - zmin));
@@ -334,8 +314,8 @@ public:
       } else {
         --depth;
         const unsigned size = (1 << depth);
-        unsigned i = ((bin.x & size) ? 1 : 0) + ((bin.y & size) ? 2 : 0) + ((bin.z & size) ? 4 : 0);
-        n = &reinterpret_cast<Branch*>(*n)->children[i];
+        unsigned i          = ((bin.x & size) ? 1 : 0) + ((bin.y & size) ? 2 : 0) + ((bin.z & size) ? 4 : 0);
+        n                   = &reinterpret_cast<Branch*>(*n)->children[i];
       }
     }
     bool result = true;
@@ -376,7 +356,7 @@ public:
       case SearchMethod::Sphere: {
         searcher.bbox_min = bin - rb;
         searcher.bbox_max = bin + rb;
-        searcher.r_sq = rb * rb;
+        searcher.r_sq     = rb * rb;
         searcher.search_volume(root(), bin, resolution() / 2);
         break;
       }
@@ -424,4 +404,4 @@ public:
 #endif
 };
 
-} // namespace Magi
+} // namespace Cutil
