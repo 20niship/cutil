@@ -470,10 +470,12 @@ public:
 
   [[nodiscard]] size_t count(const char* needle) const noexcept { return count(std::string_view(needle ? needle : "")); }
   [[nodiscard]] size_t count(const Str& needle) const noexcept { return count(std::string_view(needle.c_str())); }
-  // split, replace, trim などの関数は、Str を返すため、
-  [[nodiscard]] std::vector<Str> split(const Str& delim = " ", bool allow_empty = true, size_t maxsplit = 0) const { return split(std::string_view(delim.c_str()), allow_empty, maxsplit); }
-  [[nodiscard]] Str replace(const Str& what, const Str& by) const { return replace(what.c_str(), by.c_str()); }
-  [[nodiscard]] Str replacen(const Str& what, const Str& by) const { return replacen(what.c_str(), by.c_str()); }
+
+  [[nodiscard]] std::vector<Str> split(const Str& delim, bool allow_empty = true, size_t maxsplit = 0) const { return split(std::string_view(delim.c_str()), allow_empty, maxsplit); }
+
+  [[nodiscard]] Str replace(const Str& what, const Str& by) const { return replace(std::string_view(what.c_str()), std::string_view(by.c_str())); }
+
+  [[nodiscard]] Str replacen(const Str& what, const Str& by) const { return replacen(std::string_view(what.c_str()), std::string_view(by.c_str())); }
 
   // ========== Substr & Slicing ==========
 

@@ -40,7 +40,7 @@ TEST_SUITE("Str - Constructors") {
     Str original("copy test");
     Str copy(original);
     CHECK(copy == original);
-    CHECK(copy.c_str() != original.c_str());  // Different memory
+    CHECK(copy.c_str() != original.c_str()); // Different memory
   }
 
   TEST_CASE("Move constructor") {
@@ -52,7 +52,7 @@ TEST_SUITE("Str - Constructors") {
   }
 
   TEST_CASE("SSO with short string (<=22 chars)") {
-    Str s("short");  // 5 chars
+    Str s("short"); // 5 chars
     CHECK(s.size() == 5);
     CHECK(s.capacity() == 22);
   }
@@ -128,7 +128,7 @@ TEST_SUITE("Str - Basic Operations") {
     Str s1("hello");
     Str s2 = s1 + " world";
     CHECK(s2 == "hello world");
-    CHECK(s1 == "hello");  // Original unchanged
+    CHECK(s1 == "hello"); // Original unchanged
   }
 
   TEST_CASE("Clear") {
@@ -483,7 +483,7 @@ TEST_SUITE("Str - Utility") {
     CHECK(sim > 0.0);
     CHECK(sim < 1.0);
 
-    CHECK(s1.similarity(s1) > 0.9);  // Nearly identical
+    CHECK(s1.similarity(s1) > 0.9); // Nearly identical
   }
 }
 
@@ -529,7 +529,7 @@ TEST_SUITE("Str - Edge Cases") {
   }
 
   TEST_CASE("SSO to Heap conversion") {
-    Str s("short");  // SSO
+    Str s("short"); // SSO
     s += " this will exceed sso capacity and force heap allocation";
     CHECK(s.contains("exceed"));
   }
@@ -541,7 +541,7 @@ TEST_SUITE("Str - Edge Cases") {
 
   TEST_CASE("Unicode handling") {
     // Basic support - treating as bytes
-    Str s("こんにちは");  // Japanese characters
+    Str s("こんにちは"); // Japanese characters
     CHECK(s.size() > 0);
   }
 }
@@ -556,7 +556,7 @@ TEST_SUITE("Str - Memory Safety") {
 
   TEST_CASE("Safe resize with SSO threshold crossing") {
     Str s("small");
-    for (int i = 0; i < 20; ++i) {
+    for(int i = 0; i < 20; ++i) {
       s += "x";
     }
     CHECK(s.size() > 22);

@@ -39,17 +39,13 @@ namespace cutil {
 
 /// 任意の Python オブジェクトから Str へ変換
 /// nanobind の lambda 内で str(obj) を使用する場合
-inline Str from_python_str(const std::string& s) {
-  return Str(s);
-}
+inline Str from_python_str(const std::string& s) { return Str(s); }
 
 /// Str から std::string へ変換
 /// nanobind では自動的に行われるが、明示的な変換も可能
-inline std::string to_std_string(const Str& s) {
-  return s.to_std_string();
-}
+inline std::string to_std_string(const Str& s) { return s.to_std_string(); }
 
-}  // namespace cutil
+} // namespace cutil
 
 // ============================================================================
 // How nanobind integrates Str automatically
