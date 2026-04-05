@@ -19,12 +19,14 @@ namespace cutil {
 //
 // 注意: ObjectPool はそこから生成した全 Ref<T> より長生きしなければならない。
 template <typename T, size_t N = 64> class ObjectPool {
-private:
+public:
+  // Slot を public にして外部からアクセス可能に
   struct Slot {
     alignas(T) unsigned char storage[sizeof(T)];
     bool alive = false;
   };
 
+private:
   struct Chunk {
     std::array<Slot, N> slots;
     Chunk* next = nullptr;
@@ -147,6 +149,16 @@ public:
   }
 
   iterator end() { return iterator(nullptr, 0, nullptr, 0); }
+
+  // 外部から allocate/deallocate を使用可能に（advanced usage用）
+  Slot* allocate_slot_for_external() { return allocate_slot(); }
+
+  void deallocate_slot_for_external(Slot* slot) {
+    if(slot) {
+      slot->alive = false;
+      free_list_.push_back(slot);
+    }
+  }
 
 private:
   Chunk* head_    = nullptr;
