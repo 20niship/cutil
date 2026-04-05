@@ -22,7 +22,7 @@ TEST_SUITE("Entity System") {
     CHECK(ref->name == "test_scene");
   }
 
-  TEST_CASE("Model parent-child relationship") {
+  TEST_CASE("Model parent-child relationship with WeakPtr") {
     auto parent = Model::Create("parent");
     CHECK(parent);
 
@@ -32,7 +32,11 @@ TEST_SUITE("Entity System") {
     parent->add_child(child);
     CHECK(parent->children.size() == 1);
     CHECK(parent->children[0] == child);
-    CHECK(child->parent == parent);
+
+    // parent は WeakPtr なのでロックして比較
+    auto parent_locked = child->parent.lock();
+    CHECK(parent_locked);
+    CHECK(parent_locked == parent);
   }
 
   TEST_CASE("Model add_mesh") {
@@ -56,7 +60,7 @@ TEST_SUITE("Entity System") {
 
     parent->remove_child(child);
     CHECK(parent->children.size() == 0);
-    CHECK(child->parent == nullptr);
+    CHECK(child->parent.expired());  // WeakPtr が expired か確認
   }
 
   TEST_CASE("Scene add_model") {
@@ -69,9 +73,10 @@ TEST_SUITE("Entity System") {
     scene->add_model(model);
     CHECK(scene->root_models.size() == 1);
     CHECK(scene->root_models[0] == model);
+    CHECK(model->parent.expired());  // root なので parent は expired
   }
 
-  TEST_CASE("Complex hierarchy") {
+  TEST_CASE("Complex hierarchy with WeakPtr parent") {
     auto scene      = Scene::Create("main_scene");
     auto root1      = Model::Create("root1");
     auto child1     = Model::Create("child1");
@@ -87,10 +92,70 @@ TEST_SUITE("Entity System") {
     CHECK(root1->children.size() == 2);
     CHECK(child1->children.size() == 1);
 
-    // Check references
-    CHECK(child1->parent == root1);
-    CHECK(child2->parent == root1);
-    CHECK(grandchild->parent == child1);
+    // Check references with WeakPtr locked
+    auto child1_parent = child1->parent.lock();
+    CHECK(child1_parent == root1);
+
+    auto child2_parent = child2->parent.lock();
+    CHECK(child2_parent == root1);
+
+    auto grandchild_parent = grandchild->parent.lock();
+    CHECK(grandchild_parent == child1);
+  }
+
+  TEST_CASE("Parent deletion affects WeakPtr expiration") {
+    WeakPtr<Model> child_parent_weak;
+    {
+      auto parent = Model::Create("parent");
+      auto child  = Model::Create("child");
+      parent->add_child(child);
+
+      child_parent_weak = child->parent;
+
+      // parent がまだ存在する間は expired ではない
+      CHECK(!child_parent_weak.expired());
+      CHECK(child_parent_weak.lock());
+    }
+    // parent がスコープを抜けて削除されたので expired
+    CHECK(child_parent_weak.expired());
+  }
+
+  TEST_CASE("Circular reference prevention with WeakPtr") {
+    // Ref<Model> parent と WeakPtr<Model> parent を組み合わせることで
+    // 親→子の強参照と子→親の弱参照となり、循環参照を防ぐ
+    Ref<Model> parent;
+    Ref<Model> child;
+    {
+      parent = Model::Create("parent");
+      child  = Model::Create("child");
+
+      // add_child 前の状態
+      // parent: 1 (親変数), child: 1 (子変数)
+      CHECK(parent.use_count() == 1);
+      CHECK(child.use_count() == 1);
+
+      parent->add_child(child);
+
+      // この時点での参照カウント：
+      // - parent: 1 (parent変数のみ、parent->children に保存されていない)
+      // - child: 2 (child変数 + parent->children[0])
+      CHECK(parent.use_count() == 1);  // parent変数のみ
+      CHECK(child.use_count() == 2);   // child変数 + parent->children
+
+      // child->parent は WeakPtr なので親の参照カウントを増やさない
+      auto parent_locked = child->get_parent();
+      CHECK(parent_locked);        // WeakPtr がロック可能
+      CHECK(parent_locked == parent);
+    }
+
+    // ブロック内の変数は削除されても、外側の parent・child 変数はまだ存在
+    CHECK(parent);
+    CHECK(child);
+
+    // 子を削除すると、子の参照カウントが減る
+    parent->remove_child(child);
+    CHECK(child.use_count() == 1);   // parent->children からも削除されたので1に戻る
+    CHECK(child->parent.expired());  // WeakPtr が expired
   }
 
   TEST_CASE("WeakPtr expiration") {
@@ -102,5 +167,18 @@ TEST_SUITE("Entity System") {
       CHECK(!weak.expired());
     }
     CHECK(weak.expired());
+  }
+
+  TEST_CASE("get_parent() convenience method") {
+    auto parent = Model::Create("parent");
+    auto child  = Model::Create("child");
+
+    parent->add_child(child);
+
+    // get_parent() で直接 Ref<Model> を取得できる
+    auto parent_ref = child->get_parent();
+    CHECK(parent_ref);
+    CHECK(parent_ref == parent);
+    CHECK(parent_ref->name == "parent");
   }
 }
