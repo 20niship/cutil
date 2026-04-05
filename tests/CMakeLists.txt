@@ -8,6 +8,9 @@ add_executable(tests_main
     test_color.cpp
     test_ref.cpp
     test_ref_integration.cpp
+    test_pool.cpp
+    test_entity.cpp
+    test_entity_benchmark.cpp
 )
 
 # Link doctest header

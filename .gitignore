@@ -42,3 +42,4 @@ test_*_ext*.pyd
 py\.typed
 .mypy_cache
 build/
+.aider*
