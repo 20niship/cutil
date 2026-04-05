@@ -80,9 +80,13 @@ public:
       return tmp;
     }
 
-    reference operator*() const { return *reinterpret_cast<reference>(&map_->buckets_[index_]); }
+    reference operator*() const {
+      return reinterpret_cast<reference>(map_->buckets_[index_]);
+    }
 
-    pointer operator->() const { return reinterpret_cast<pointer>(&map_->buckets_[index_]); }
+    pointer operator->() const {
+      return reinterpret_cast<pointer>(std::addressof(map_->buckets_[index_]));
+    }
 
     bool operator==(const iterator& other) const { return map_ == other.map_ && index_ == other.index_; }
 
@@ -125,9 +129,13 @@ public:
       return tmp;
     }
 
-    reference operator*() const { return *reinterpret_cast<const_pointer>(&map_->buckets_[index_]); }
+    reference operator*() const {
+      return reinterpret_cast<reference>(const_cast<Node&>(map_->buckets_[index_]));
+    }
 
-    pointer operator->() const { return reinterpret_cast<const_pointer>(&map_->buckets_[index_]); }
+    pointer operator->() const {
+      return reinterpret_cast<pointer>(const_cast<Node*>(std::addressof(map_->buckets_[index_])));
+    }
 
     bool operator==(const const_iterator& other) const { return map_ == other.map_ && index_ == other.index_; }
 
@@ -197,9 +205,9 @@ public:
     bool inserted = !buckets_[idx].occupied;
 
     if(inserted) {
-      new(&buckets_[idx].key) Key(key);
-      new(&buckets_[idx].value) Value(value);
-      buckets_[idx].occupied  = true;
+      buckets_[idx].key = key;
+      buckets_[idx].value = value;
+      buckets_[idx].occupied = true;
       buckets_[idx].hash_code = Hash{}(key);
       ++size_;
     } else {
@@ -259,8 +267,13 @@ public:
 
   // Operator[]
   Value& operator[](const Key& key) {
-    auto [it, inserted] = insert(key, Value());
-    return it->second;
+    auto it = find(key);
+    if(it != end()) {
+      return it->second;
+    }
+    // Insert new entry with default value
+    auto [new_it, _] = insert(key, Value());
+    return new_it->second;
   }
 
   // Clear

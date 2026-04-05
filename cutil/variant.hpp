@@ -3,7 +3,9 @@
 #include <cstring>
 #include <functional>
 #include <memory>
+#include <string>
 #include <typeinfo>
+#include <tuple>
 #include <utility>
 
 namespace cutil {
@@ -15,6 +17,11 @@ namespace detail {
 
 // Helper: Index of a type in a type list
 template <typename T, typename... Types> struct type_index;
+
+template <typename T> struct type_index<T> {
+  // Base case - type not found, should not be instantiated
+  static constexpr size_t value = 0;
+};
 
 template <typename T, typename First, typename... Rest> struct type_index<T, First, Rest...> {
   static constexpr size_t value = std::is_same_v<T, First> ? 0 : 1 + type_index<T, Rest...>::value;
@@ -175,7 +182,10 @@ private:
     switch(idx) {
       case 0:
         if constexpr(sizeof...(Types) > 0) {
-          reinterpret_cast<std::tuple_element_t<0, std::tuple<Types...>>*>(storage_)->~std::tuple_element_t<0, std::tuple<Types...>>();
+          using T0 = std::tuple_element_t<0, std::tuple<Types...>>;
+          if constexpr(!std::is_trivially_destructible_v<T0>) {
+            reinterpret_cast<T0*>(storage_)->~T0();
+          }
         }
         break;
       default: destroy_impl<1>(idx); break;
@@ -184,8 +194,11 @@ private:
 
   template <size_t I> void destroy_impl(size_t idx) {
     if constexpr(I < sizeof...(Types)) {
+      using TI = std::tuple_element_t<I, std::tuple<Types...>>;
       if(idx == I) {
-        reinterpret_cast<std::tuple_element_t<I, std::tuple<Types...>>*>(storage_)->~std::tuple_element_t<I, std::tuple<Types...>>();
+        if constexpr(!std::is_trivially_destructible_v<TI>) {
+          reinterpret_cast<TI*>(storage_)->~TI();
+        }
       } else {
         destroy_impl<I + 1>(idx);
       }
