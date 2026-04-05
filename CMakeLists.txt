@@ -1,15 +1,27 @@
 cmake_minimum_required(VERSION 3.12)
-project(cutil)
+project(tests)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+# テスト用ソースファイル
+set(TEST_SOURCES
+    test_string.cpp
+)
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+# テスト実行ファイル
+add_executable(test_runner ${TEST_SOURCES})
 
-find_package(Python COMPONENTS Interpreter Development REQUIRED)
-add_subdirectory(ext/nanobind)
-nanobind_add_module( mylib NB_STATIC STABLE_ABI LTO example/mylib.cpp)
+# インクルードディレクトリ
+target_include_directories(test_runner PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../cutil
+    ${CMAKE_CURRENT_SOURCE_DIR}/../ext
+)
 
-enable_testing()
-add_subdirectory(tests)
+# ライブラリリンク
+target_link_libraries(test_runner PRIVATE
+    cutil
+    Threads::Threads
+)
+
+# doctest の設定
+include(CTest)
+add_test(NAME StrTests COMMAND test_runner)
