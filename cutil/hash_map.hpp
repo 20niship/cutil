@@ -46,7 +46,7 @@ public:
 private:
   using Node = detail::hash_node<Key, Value>;
 
-  static constexpr float LOAD_FACTOR_MAX  = 0.75f;
+  static constexpr float LOAD_FACTOR_MAX   = 0.75f;
   static constexpr size_t INITIAL_CAPACITY = 16;
   static constexpr size_t MIN_CAPACITY     = 8;
 
@@ -152,8 +152,7 @@ public:
     }
   }
 
-  hash_map(hash_map&& other) noexcept
-      : buckets_(std::move(other.buckets_)), capacity_(other.capacity_), size_(other.size_) {
+  hash_map(hash_map&& other) noexcept : buckets_(std::move(other.buckets_)), capacity_(other.capacity_), size_(other.size_) {
     other.capacity_ = INITIAL_CAPACITY;
     other.size_     = 0;
     other.buckets_.resize(INITIAL_CAPACITY);
@@ -352,7 +351,7 @@ private:
   bool should_rehash() const { return static_cast<float>(size_) / static_cast<float>(capacity_) >= LOAD_FACTOR_MAX; }
 
   void rehash(size_t new_capacity) {
-    auto old_buckets = buckets_;
+    auto old_buckets  = buckets_;
     auto old_capacity = capacity_;
 
     capacity_ = new_capacity;

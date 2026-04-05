@@ -1,6 +1,6 @@
+#include <cmath>
 #include <cutil/vec.hpp>
 #include <doctest.h>
-#include <cmath>
 
 using namespace Cutil;
 
@@ -211,7 +211,7 @@ TEST_SUITE("NVec - Dot Product & Length") {
     Vec3f v1(1.0f, 2.0f, 3.0f);
     Vec3f v2(4.0f, 5.0f, 6.0f);
     float d = v1.dot(v2);
-    CHECK(d == doctest::Approx(32.0f));  // 1*4 + 2*5 + 3*6 = 4 + 10 + 18 = 32
+    CHECK(d == doctest::Approx(32.0f)); // 1*4 + 2*5 + 3*6 = 4 + 10 + 18 = 32
   }
 
   TEST_CASE("Length squared") {
@@ -308,7 +308,7 @@ TEST_SUITE("NVec - Godot-style Functions") {
 
   TEST_CASE("reflect") {
     Vec3f incident(1.0f, -1.0f, 0.0f);
-    Vec3f normal(0.0f, 1.0f, 0.0f);  // normal pointing up
+    Vec3f normal(0.0f, 1.0f, 0.0f); // normal pointing up
     Vec3f reflected = incident.reflect(normal);
     CHECK(reflected[0] == doctest::Approx(1.0f));
     CHECK(reflected[1] == doctest::Approx(1.0f));

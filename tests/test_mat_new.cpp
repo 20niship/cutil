@@ -1,6 +1,6 @@
+#include <cmath>
 #include <cutil/mat.hpp>
 #include <doctest.h>
-#include <cmath>
 
 using namespace Cutil;
 
@@ -69,7 +69,7 @@ TEST_SUITE("Mat - Element Access") {
   }
 
   TEST_CASE("Column access") {
-    Mat3f m = Mat3f::identity();
+    Mat3f m    = Mat3f::identity();
     Vec3f col0 = m.col(0);
     CHECK(col0[0] == 1.0f);
     CHECK(col0[1] == 0.0f);
@@ -77,7 +77,7 @@ TEST_SUITE("Mat - Element Access") {
   }
 
   TEST_CASE("Row access") {
-    Mat3f m = Mat3f::identity();
+    Mat3f m    = Mat3f::identity();
     Vec3f row0 = m.row(0);
     CHECK(row0[0] == 1.0f);
     CHECK(row0[1] == 0.0f);
@@ -122,28 +122,28 @@ TEST_SUITE("Mat - Arithmetic Operations") {
 
   TEST_CASE("Scalar multiplication") {
     Mat3f m;
-    m(0, 0) = 2.0f;
+    m(0, 0)  = 2.0f;
     Mat3f m2 = m * 3.0f;
     CHECK(m2(0, 0) == 6.0f);
   }
 
   TEST_CASE("Scalar multiplication (scalar * matrix)") {
     Mat3f m;
-    m(0, 0) = 2.0f;
+    m(0, 0)  = 2.0f;
     Mat3f m2 = 3.0f * m;
     CHECK(m2(0, 0) == 6.0f);
   }
 
   TEST_CASE("Scalar division") {
     Mat3f m;
-    m(0, 0) = 6.0f;
+    m(0, 0)  = 6.0f;
     Mat3f m2 = m / 3.0f;
     CHECK(doctest::Approx(m2(0, 0)) == 2.0f);
   }
 
   TEST_CASE("Negation") {
     Mat3f m;
-    m(0, 0) = 5.0f;
+    m(0, 0)  = 5.0f;
     Mat3f m2 = -m;
     CHECK(m2(0, 0) == -5.0f);
   }
@@ -193,15 +193,15 @@ TEST_SUITE("Mat - Matrix Multiplication") {
   }
 
   TEST_CASE("Identity matrix multiplication") {
-    Mat3f m = Mat3f::identity();
+    Mat3f m      = Mat3f::identity();
     Mat3f result = m * m;
     CHECK(result == m);
   }
 
   TEST_CASE("4x4 * 4x4 matrix multiplication") {
-    Mat4f m1 = Mat4f::identity();
-    m1(0, 3) = 5.0f;  // Translation in x
-    Mat4f m2 = Mat4f::identity();
+    Mat4f m1     = Mat4f::identity();
+    m1(0, 3)     = 5.0f; // Translation in x
+    Mat4f m2     = Mat4f::identity();
     Mat4f result = m1 * m2;
     CHECK(doctest::Approx(result(0, 3)) == 5.0f);
   }
@@ -243,9 +243,9 @@ TEST_SUITE("Mat - Matrix-Vector Multiplication") {
 TEST_SUITE("Mat - Transpose") {
   TEST_CASE("Matrix transpose 3x3") {
     Mat3f m;
-    m(0, 0) = 1.0f;
-    m(0, 1) = 2.0f;
-    m(1, 0) = 3.0f;
+    m(0, 0)  = 1.0f;
+    m(0, 1)  = 2.0f;
+    m(1, 0)  = 3.0f;
     Mat3f mt = m.transposed();
     CHECK(mt(0, 0) == 1.0f);
     CHECK(mt(0, 1) == 3.0f);
@@ -254,7 +254,7 @@ TEST_SUITE("Mat - Transpose") {
 
   TEST_CASE("Transpose of transpose is identity") {
     Mat3f m;
-    m(0, 1) = 5.0f;
+    m(0, 1)  = 5.0f;
     Mat3f mt = m.transposed().transposed();
     CHECK(mt == m);
   }
@@ -271,27 +271,27 @@ TEST_SUITE("Mat - Transpose") {
 
 TEST_SUITE("Mat - Determinant") {
   TEST_CASE("Identity matrix determinant") {
-    Mat3f m = Mat3f::identity();
+    Mat3f m   = Mat3f::identity();
     float det = m.det();
     CHECK(doctest::Approx(det) == 1.0f);
   }
 
   TEST_CASE("Singular matrix determinant") {
     Mat3f m;
-    m(0, 0) = 1.0f;
-    m(0, 1) = 2.0f;
-    m(1, 0) = 2.0f;
-    m(1, 1) = 4.0f;
+    m(0, 0)   = 1.0f;
+    m(0, 1)   = 2.0f;
+    m(1, 0)   = 2.0f;
+    m(1, 1)   = 4.0f;
     float det = m.det();
     CHECK(doctest::Approx(det) == 0.0f);
   }
 
   TEST_CASE("2x2 matrix determinant") {
     Mat<2, 2, float> m;
-    m(0, 0) = 1.0f;
-    m(0, 1) = 2.0f;
-    m(1, 0) = 3.0f;
-    m(1, 1) = 4.0f;
+    m(0, 0)   = 1.0f;
+    m(0, 1)   = 2.0f;
+    m(1, 0)   = 3.0f;
+    m(1, 1)   = 4.0f;
     float det = m.det();
     // det = 1*4 - 2*3 = 4 - 6 = -2
     CHECK(doctest::Approx(det) == -2.0f);
@@ -300,17 +300,17 @@ TEST_SUITE("Mat - Determinant") {
 
 TEST_SUITE("Mat - Inverse") {
   TEST_CASE("Identity matrix inverse") {
-    Mat3f m = Mat3f::identity();
+    Mat3f m     = Mat3f::identity();
     Mat3f m_inv = m.inverse();
     CHECK(m_inv == m);
   }
 
   TEST_CASE("Matrix * Inverse = Identity") {
     Mat3f m;
-    m(0, 0) = 2.0f;
-    m(1, 1) = 3.0f;
-    m(2, 2) = 4.0f;
-    Mat3f m_inv = m.inverse();
+    m(0, 0)      = 2.0f;
+    m(1, 1)      = 3.0f;
+    m(2, 2)      = 4.0f;
+    Mat3f m_inv  = m.inverse();
     Mat3f result = m * m_inv;
     for(int i = 0; i < 3; i++) {
       for(int j = 0; j < 3; j++) {
@@ -323,13 +323,13 @@ TEST_SUITE("Mat - Inverse") {
 
 TEST_SUITE("Mat - Square Matrix Functions") {
   TEST_CASE("Trace of identity") {
-    Mat3f m = Mat3f::identity();
+    Mat3f m  = Mat3f::identity();
     float tr = m.trace();
     CHECK(tr == 3.0f);
   }
 
   TEST_CASE("Frobenius norm") {
-    Mat3f m = Mat3f::identity();
+    Mat3f m     = Mat3f::identity();
     double norm = m.frobenius_norm();
     // Norm of identity = sqrt(1 + 1 + 1) = sqrt(3)
     CHECK(norm == doctest::Approx(std::sqrt(3.0)));

@@ -11,8 +11,7 @@
 
 namespace Cutil {
 
-template <unsigned int N, typename T>
-struct NVec {
+template <unsigned int N, typename T> struct NVec {
   static_assert(N > 0, "NVec: dimension N must be > 0");
   static_assert(std::is_arithmetic<T>::value, "NVec: T must be an arithmetic type");
 
@@ -60,8 +59,7 @@ struct NVec {
   }
 
   // Convert from a different element type
-  template <typename U>
-  explicit constexpr NVec(const NVec<N, U>& o) {
+  template <typename U> explicit constexpr NVec(const NVec<N, U>& o) {
     for(unsigned int i = 0; i < N; i++) data[i] = static_cast<T>(o.data[i]);
   }
 
@@ -260,10 +258,10 @@ struct NVec {
   NVec slerp(const NVec& o, double t) const {
     static_assert(N == 3 || N == 4, "slerp requires N == 3 or N == 4");
     double dot_v = std::max(-1.0, std::min(1.0, static_cast<double>(dot(o))));
-    double theta  = std::acos(dot_v) * t;
-    NVec rel      = (o - (*this) * static_cast<T>(dot_v)).safe_normalized();
-    double cos_t  = std::cos(theta);
-    double sin_t  = std::sin(theta);
+    double theta = std::acos(dot_v) * t;
+    NVec rel     = (o - (*this) * static_cast<T>(dot_v)).safe_normalized();
+    double cos_t = std::cos(theta);
+    double sin_t = std::sin(theta);
     NVec r;
     for(unsigned int i = 0; i < N; i++) r.data[i] = static_cast<T>(data[i] * cos_t + rel.data[i] * sin_t);
     return r;
@@ -370,18 +368,11 @@ struct NVec {
 
 // ---- Non-member operators --------------------------------------------------
 
-template <unsigned int N, typename T>
-constexpr NVec<N, T> operator*(T s, const NVec<N, T>& v) {
-  return v * s;
-}
+template <unsigned int N, typename T> constexpr NVec<N, T> operator*(T s, const NVec<N, T>& v) { return v * s; }
 
-template <unsigned int N, typename T>
-constexpr NVec<N, T> operator+(T s, const NVec<N, T>& v) {
-  return v + s;
-}
+template <unsigned int N, typename T> constexpr NVec<N, T> operator+(T s, const NVec<N, T>& v) { return v + s; }
 
-template <unsigned int N, typename T>
-std::ostream& operator<<(std::ostream& os, const NVec<N, T>& v) {
+template <unsigned int N, typename T> std::ostream& operator<<(std::ostream& os, const NVec<N, T>& v) {
   os << "NVec<" << N << ">(";
   for(unsigned int i = 0; i < N; i++) {
     os << v.data[i];
@@ -392,66 +383,30 @@ std::ostream& operator<<(std::ostream& os, const NVec<N, T>& v) {
 
 // ---- GLSL-style free functions --------------------------------------------
 
-template <unsigned int N, typename T>
-constexpr T dot(const NVec<N, T>& a, const NVec<N, T>& b) {
-  return a.dot(b);
-}
+template <unsigned int N, typename T> constexpr T dot(const NVec<N, T>& a, const NVec<N, T>& b) { return a.dot(b); }
 
-template <unsigned int N, typename T>
-double length(const NVec<N, T>& v) {
-  return v.length();
-}
+template <unsigned int N, typename T> double length(const NVec<N, T>& v) { return v.length(); }
 
-template <unsigned int N, typename T>
-NVec<N, T> normalize(const NVec<N, T>& v) {
-  return v.normalized();
-}
+template <unsigned int N, typename T> NVec<N, T> normalize(const NVec<N, T>& v) { return v.normalized(); }
 
-template <typename T>
-constexpr NVec<3, T> cross(const NVec<3, T>& a, const NVec<3, T>& b) {
-  return a.cross(b);
-}
+template <typename T> constexpr NVec<3, T> cross(const NVec<3, T>& a, const NVec<3, T>& b) { return a.cross(b); }
 
 // GLSL: mix (same as lerp)
-template <unsigned int N, typename T>
-NVec<N, T> mix(const NVec<N, T>& a, const NVec<N, T>& b, double t) {
-  return a.lerp(b, t);
-}
+template <unsigned int N, typename T> NVec<N, T> mix(const NVec<N, T>& a, const NVec<N, T>& b, double t) { return a.lerp(b, t); }
 
-template <unsigned int N, typename T>
-NVec<N, T> lerp(const NVec<N, T>& a, const NVec<N, T>& b, double t) {
-  return a.lerp(b, t);
-}
+template <unsigned int N, typename T> NVec<N, T> lerp(const NVec<N, T>& a, const NVec<N, T>& b, double t) { return a.lerp(b, t); }
 
-template <unsigned int N, typename T>
-NVec<N, T> reflect(const NVec<N, T>& incident, const NVec<N, T>& normal) {
-  return incident.reflect(normal);
-}
+template <unsigned int N, typename T> NVec<N, T> reflect(const NVec<N, T>& incident, const NVec<N, T>& normal) { return incident.reflect(normal); }
 
-template <unsigned int N, typename T>
-NVec<N, T> abs(const NVec<N, T>& v) {
-  return v.abs();
-}
+template <unsigned int N, typename T> NVec<N, T> abs(const NVec<N, T>& v) { return v.abs(); }
 
-template <unsigned int N, typename T>
-NVec<N, T> clamp(const NVec<N, T>& v, T lo, T hi) {
-  return v.clamp(lo, hi);
-}
+template <unsigned int N, typename T> NVec<N, T> clamp(const NVec<N, T>& v, T lo, T hi) { return v.clamp(lo, hi); }
 
-template <unsigned int N, typename T>
-NVec<N, T> min(const NVec<N, T>& a, const NVec<N, T>& b) {
-  return a.min_with(b);
-}
+template <unsigned int N, typename T> NVec<N, T> min(const NVec<N, T>& a, const NVec<N, T>& b) { return a.min_with(b); }
 
-template <unsigned int N, typename T>
-NVec<N, T> max(const NVec<N, T>& a, const NVec<N, T>& b) {
-  return a.max_with(b);
-}
+template <unsigned int N, typename T> NVec<N, T> max(const NVec<N, T>& a, const NVec<N, T>& b) { return a.max_with(b); }
 
-template <unsigned int N, typename T>
-double distance(const NVec<N, T>& a, const NVec<N, T>& b) {
-  return a.distance_to(b);
-}
+template <unsigned int N, typename T> double distance(const NVec<N, T>& a, const NVec<N, T>& b) { return a.distance_to(b); }
 
 // ---- Common type aliases (matching GLSL / GLM conventions) ----------------
 

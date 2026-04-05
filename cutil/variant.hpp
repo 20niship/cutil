@@ -52,25 +52,19 @@ template <typename... Types> class variant {
   static constexpr size_t storage_size  = detail::max_size<Types...>::value;
   static constexpr size_t storage_align = detail::max_align<Types...>::value;
 
-  using Destructor = void (*)(void*);
+  using Destructor      = void (*)(void*);
   using CopyConstructor = void (*)(const void*, void*);
   using MoveConstructor = void (*)(void*, void*);
 
 public:
   // Default constructor - constructs first type
-  variant() : index_(0) {
-    new(storage_) std::tuple_element_t<0, std::tuple<Types...>>();
-  }
+  variant() : index_(0) { new(storage_) std::tuple_element_t<0, std::tuple<Types...>>(); }
 
   // Constructor from value
-  template <typename T, typename = std::enable_if_t<detail::has_type<T, Types...>>> explicit variant(const T& value) : index_(detail::type_index<T, Types...>::value) {
-    new(storage_) T(value);
-  }
+  template <typename T, typename = std::enable_if_t<detail::has_type<T, Types...>>> explicit variant(const T& value) : index_(detail::type_index<T, Types...>::value) { new(storage_) T(value); }
 
   // Constructor from rvalue
-  template <typename T, typename = std::enable_if_t<detail::has_type<T, Types...>>> explicit variant(T&& value) : index_(detail::type_index<T, Types...>::value) {
-    new(storage_) T(std::move(value));
-  }
+  template <typename T, typename = std::enable_if_t<detail::has_type<T, Types...>>> explicit variant(T&& value) : index_(detail::type_index<T, Types...>::value) { new(storage_) T(std::move(value)); }
 
   // Copy constructor
   variant(const variant& other) : index_(other.index_) { other.copy_to(storage_, index_); }
@@ -184,9 +178,7 @@ private:
           reinterpret_cast<std::tuple_element_t<0, std::tuple<Types...>>*>(storage_)->~std::tuple_element_t<0, std::tuple<Types...>>();
         }
         break;
-      default:
-        destroy_impl<1>(idx);
-        break;
+      default: destroy_impl<1>(idx); break;
     }
   }
 
@@ -207,9 +199,7 @@ private:
           new(dest) std::tuple_element_t<0, std::tuple<Types...>>(*reinterpret_cast<const std::tuple_element_t<0, std::tuple<Types...>>*>(storage_));
         }
         break;
-      default:
-        copy_impl<1>(dest, idx);
-        break;
+      default: copy_impl<1>(dest, idx); break;
     }
   }
 
@@ -230,9 +220,7 @@ private:
           new(dest) std::tuple_element_t<0, std::tuple<Types...>>(std::move(*reinterpret_cast<std::tuple_element_t<0, std::tuple<Types...>>*>(storage_)));
         }
         break;
-      default:
-        move_impl<1>(dest, idx);
-        break;
+      default: move_impl<1>(dest, idx); break;
     }
   }
 
@@ -253,8 +241,7 @@ private:
           return *reinterpret_cast<const std::tuple_element_t<0, std::tuple<Types...>>*>(storage_) == *reinterpret_cast<const std::tuple_element_t<0, std::tuple<Types...>>*>(other.storage_);
         }
         return true;
-      default:
-        return equals_impl<1>(other, idx);
+      default: return equals_impl<1>(other, idx);
     }
   }
 

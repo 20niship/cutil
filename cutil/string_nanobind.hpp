@@ -15,7 +15,7 @@ template <> struct type_caster<cutil::Str> {
   bool from_python(handle src, uint8_t flags, cleanup_list* list) noexcept {
     // std::string へ変換
     type_caster<std::string> caster;
-    if (!caster.from_python(src, flags, list)) {
+    if(!caster.from_python(src, flags, list)) {
       return false;
     }
     // std::string から cutil::Str へ変換

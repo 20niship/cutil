@@ -60,7 +60,7 @@ TEST_SUITE("Entity System") {
 
     parent->remove_child(child);
     CHECK(parent->children.size() == 0);
-    CHECK(child->parent.expired());  // WeakPtr が expired か確認
+    CHECK(child->parent.expired()); // WeakPtr が expired か確認
   }
 
   TEST_CASE("Scene add_model") {
@@ -73,7 +73,7 @@ TEST_SUITE("Entity System") {
     scene->add_model(model);
     CHECK(scene->root_models.size() == 1);
     CHECK(scene->root_models[0] == model);
-    CHECK(model->parent.expired());  // root なので parent は expired
+    CHECK(model->parent.expired()); // root なので parent は expired
   }
 
   TEST_CASE("Complex hierarchy with WeakPtr parent") {
@@ -139,12 +139,12 @@ TEST_SUITE("Entity System") {
       // この時点での参照カウント：
       // - parent: 1 (parent変数のみ、parent->children に保存されていない)
       // - child: 2 (child変数 + parent->children[0])
-      CHECK(parent.use_count() == 1);  // parent変数のみ
-      CHECK(child.use_count() == 2);   // child変数 + parent->children
+      CHECK(parent.use_count() == 1); // parent変数のみ
+      CHECK(child.use_count() == 2);  // child変数 + parent->children
 
       // child->parent は WeakPtr なので親の参照カウントを増やさない
       auto parent_locked = child->get_parent();
-      CHECK(parent_locked);        // WeakPtr がロック可能
+      CHECK(parent_locked); // WeakPtr がロック可能
       CHECK(parent_locked == parent);
     }
 
@@ -154,8 +154,8 @@ TEST_SUITE("Entity System") {
 
     // 子を削除すると、子の参照カウントが減る
     parent->remove_child(child);
-    CHECK(child.use_count() == 1);   // parent->children からも削除されたので1に戻る
-    CHECK(child->parent.expired());  // WeakPtr が expired
+    CHECK(child.use_count() == 1);  // parent->children からも削除されたので1に戻る
+    CHECK(child->parent.expired()); // WeakPtr が expired
   }
 
   TEST_CASE("WeakPtr expiration") {

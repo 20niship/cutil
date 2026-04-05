@@ -15,12 +15,10 @@ namespace Cutil {
 
 // Forward declaration for matrix multiplication helpers
 namespace detail {
-template <unsigned int Rows, unsigned int K, unsigned int Cols, typename T>
-void mat_mul_impl(const T* A, const T* B, T* C);
+template <unsigned int Rows, unsigned int K, unsigned int Cols, typename T> void mat_mul_impl(const T* A, const T* B, T* C);
 }
 
-template <unsigned int Rows, unsigned int Cols, typename T>
-struct Mat {
+template <unsigned int Rows, unsigned int Cols, typename T> struct Mat {
   static_assert(Rows > 0, "Mat: Rows must be > 0");
   static_assert(Cols > 0, "Mat: Cols must be > 0");
   static_assert(std::is_arithmetic<T>::value, "Mat: T must be arithmetic");
@@ -157,8 +155,7 @@ struct Mat {
 
   // ---- Matrix multiplication: Mat<Rows, K> * Mat<K, Cols> -> Mat<Rows, Cols> -------
 
-  template <unsigned int K>
-  Mat<Rows, K, T> operator*(const Mat<K, Cols, T>& B) const {
+  template <unsigned int K> Mat<Rows, K, T> operator*(const Mat<K, Cols, T>& B) const {
     Mat<Rows, K, T> result;
     detail::mat_mul_impl<Rows, Cols, K, T>(data, B.data, result.data);
     return result;
@@ -220,7 +217,7 @@ struct Mat {
       for(unsigned int j = i + 1; j < Rows; j++) {
         if(std::abs(tmp(j, i)) > std::abs(tmp(pivot, i))) pivot = j;
       }
-      if(std::abs(tmp(pivot, i)) < T(1e-10)) return T(0);  // Singular
+      if(std::abs(tmp(pivot, i)) < T(1e-10)) return T(0); // Singular
       if(pivot != static_cast<int>(i)) {
         // Swap rows
         for(unsigned int k = 0; k < Cols; k++) {
@@ -248,8 +245,8 @@ struct Mat {
   Mat inverse() const {
     static_assert(Rows == Cols, "inverse() requires square matrix");
     const unsigned int N = Rows;
-    Mat A                 = *this;
-    Mat I                 = Mat::identity();
+    Mat A                = *this;
+    Mat I                = Mat::identity();
 
     for(unsigned int i = 0; i < N; i++) {
       // Find pivot
@@ -347,8 +344,7 @@ struct Mat {
 namespace detail {
 
 // General implementation (used for most cases)
-template <unsigned int Rows, unsigned int K, unsigned int Cols, typename T>
-inline void mat_mul_impl(const T* A, const T* B, T* C) {
+template <unsigned int Rows, unsigned int K, unsigned int Cols, typename T> inline void mat_mul_impl(const T* A, const T* B, T* C) {
   // C = A * B, where A is Rows x K, B is K x Cols
   // Column-major layout
   for(unsigned int col = 0; col < Cols; col++) {
@@ -366,8 +362,7 @@ inline void mat_mul_impl(const T* A, const T* B, T* C) {
 #ifdef __SSE2__
 #include <immintrin.h>
 
-template <>
-inline void mat_mul_impl<4, 4, 4, float>(const float* A, const float* B, float* C) {
+template <> inline void mat_mul_impl<4, 4, 4, float>(const float* A, const float* B, float* C) {
   // Optimized 4x4 float matrix multiplication using SSE2
   // A and B are 4x4 in column-major
   const __m128* Acol = reinterpret_cast<const __m128*>(A);
@@ -389,8 +384,7 @@ inline void mat_mul_impl<4, 4, 4, float>(const float* A, const float* B, float* 
 }
 
 // Specialization for Mat<4, 4, float> * Vec<4, float>
-template <>
-inline void mat_mul_impl<4, 4, 1, float>(const float* A, const float* B, float* C) {
+template <> inline void mat_mul_impl<4, 4, 1, float>(const float* A, const float* B, float* C) {
   const __m128* Acol = reinterpret_cast<const __m128*>(A);
   __m128 b0          = _mm_set1_ps(B[0]);
   __m128 b1          = _mm_set1_ps(B[1]);
@@ -406,17 +400,13 @@ inline void mat_mul_impl<4, 4, 1, float>(const float* A, const float* B, float* 
 }
 #endif
 
-}  // namespace detail
+} // namespace detail
 
 // ---- Non-member operators ---------------------------------------------------
 
-template <unsigned int R, unsigned int C, typename T>
-Mat<R, C, T> operator*(T s, const Mat<R, C, T>& m) {
-  return m * s;
-}
+template <unsigned int R, unsigned int C, typename T> Mat<R, C, T> operator*(T s, const Mat<R, C, T>& m) { return m * s; }
 
-template <unsigned int R, unsigned int C, typename T>
-std::ostream& operator<<(std::ostream& os, const Mat<R, C, T>& m) {
+template <unsigned int R, unsigned int C, typename T> std::ostream& operator<<(std::ostream& os, const Mat<R, C, T>& m) {
   os << "Mat<" << R << ", " << C << ">(\n";
   for(unsigned int r = 0; r < R; r++) {
     os << "  [";
@@ -433,75 +423,69 @@ std::ostream& operator<<(std::ostream& os, const Mat<R, C, T>& m) {
 // ---- Godot-inspired 3D transform functions (4x4 matrices) ------------------
 
 // Translation matrix
-template <typename T>
-Mat<4, 4, T> mat4_translation(const NVec<3, T>& t) {
+template <typename T> Mat<4, 4, T> mat4_translation(const NVec<3, T>& t) {
   Mat<4, 4, T> m = Mat<4, 4, T>::identity();
-  m(0, 3) = t[0];
-  m(1, 3) = t[1];
-  m(2, 3) = t[2];
+  m(0, 3)        = t[0];
+  m(1, 3)        = t[1];
+  m(2, 3)        = t[2];
   return m;
 }
 
 // Scale matrix
-template <typename T>
-Mat<4, 4, T> mat4_scale(const NVec<3, T>& s) {
+template <typename T> Mat<4, 4, T> mat4_scale(const NVec<3, T>& s) {
   Mat<4, 4, T> m = Mat<4, 4, T>::identity();
-  m(0, 0) = s[0];
-  m(1, 1) = s[1];
-  m(2, 2) = s[2];
+  m(0, 0)        = s[0];
+  m(1, 1)        = s[1];
+  m(2, 2)        = s[2];
   return m;
 }
 
 // Rotation matrices (around principal axes)
-template <typename T>
-Mat<4, 4, T> mat4_rotation_x(double angle) {
+template <typename T> Mat<4, 4, T> mat4_rotation_x(double angle) {
   Mat<4, 4, T> m = Mat<4, 4, T>::identity();
   T c            = static_cast<T>(std::cos(angle));
   T s            = static_cast<T>(std::sin(angle));
-  m(1, 1) = c;
-  m(1, 2) = -s;
-  m(2, 1) = s;
-  m(2, 2) = c;
+  m(1, 1)        = c;
+  m(1, 2)        = -s;
+  m(2, 1)        = s;
+  m(2, 2)        = c;
   return m;
 }
 
-template <typename T>
-Mat<4, 4, T> mat4_rotation_y(double angle) {
+template <typename T> Mat<4, 4, T> mat4_rotation_y(double angle) {
   Mat<4, 4, T> m = Mat<4, 4, T>::identity();
   T c            = static_cast<T>(std::cos(angle));
   T s            = static_cast<T>(std::sin(angle));
-  m(0, 0) = c;
-  m(0, 2) = s;
-  m(2, 0) = -s;
-  m(2, 2) = c;
+  m(0, 0)        = c;
+  m(0, 2)        = s;
+  m(2, 0)        = -s;
+  m(2, 2)        = c;
   return m;
 }
 
-template <typename T>
-Mat<4, 4, T> mat4_rotation_z(double angle) {
+template <typename T> Mat<4, 4, T> mat4_rotation_z(double angle) {
   Mat<4, 4, T> m = Mat<4, 4, T>::identity();
   T c            = static_cast<T>(std::cos(angle));
   T s            = static_cast<T>(std::sin(angle));
-  m(0, 0) = c;
-  m(0, 1) = -s;
-  m(1, 0) = s;
-  m(1, 1) = c;
+  m(0, 0)        = c;
+  m(0, 1)        = -s;
+  m(1, 0)        = s;
+  m(1, 1)        = c;
   return m;
 }
 
 // Rodrigues' rotation formula: rotation by angle around axis
-template <typename T>
-Mat<4, 4, T> mat4_rotation(const NVec<3, T>& axis, double angle) {
-  T c = static_cast<T>(std::cos(angle));
-  T s = static_cast<T>(std::sin(angle));
-  T t = T(1) - c;
+template <typename T> Mat<4, 4, T> mat4_rotation(const NVec<3, T>& axis, double angle) {
+  T c          = static_cast<T>(std::cos(angle));
+  T s          = static_cast<T>(std::sin(angle));
+  T t          = T(1) - c;
   NVec<3, T> n = axis.normalized();
   T x = n[0], y = n[1], z = n[2];
 
   Mat<4, 4, T> m = Mat<4, 4, T>::identity();
-  m(0, 0) = t * x * x + c;
-  m(0, 1) = t * x * y - z * s;
-  m(0, 2) = t * x * z + y * s;
+  m(0, 0)        = t * x * x + c;
+  m(0, 1)        = t * x * y - z * s;
+  m(0, 2)        = t * x * z + y * s;
 
   m(1, 0) = t * x * y + z * s;
   m(1, 1) = t * y * y + c;
@@ -514,16 +498,15 @@ Mat<4, 4, T> mat4_rotation(const NVec<3, T>& axis, double angle) {
 }
 
 // Look-at matrix (Godot: Transform3D::looking_at)
-template <typename T>
-Mat<4, 4, T> mat4_look_at(const NVec<3, T>& eye, const NVec<3, T>& center, const NVec<3, T>& up) {
+template <typename T> Mat<4, 4, T> mat4_look_at(const NVec<3, T>& eye, const NVec<3, T>& center, const NVec<3, T>& up) {
   NVec<3, T> f = (center - eye).normalized();
   NVec<3, T> s = f.cross(up).normalized();
   NVec<3, T> u = s.cross(f);
 
   Mat<4, 4, T> m = Mat<4, 4, T>::identity();
-  m(0, 0) = s[0];
-  m(1, 0) = s[1];
-  m(2, 0) = s[2];
+  m(0, 0)        = s[0];
+  m(1, 0)        = s[1];
+  m(2, 0)        = s[2];
 
   m(0, 1) = u[0];
   m(1, 1) = u[1];
@@ -540,12 +523,11 @@ Mat<4, 4, T> mat4_look_at(const NVec<3, T>& eye, const NVec<3, T>& center, const
 }
 
 // Perspective projection (like Godot's Projection::perspective)
-template <typename T>
-Mat<4, 4, T> mat4_perspective(double fov_y, double aspect, double z_near, double z_far) {
+template <typename T> Mat<4, 4, T> mat4_perspective(double fov_y, double aspect, double z_near, double z_far) {
   T f = static_cast<T>(1.0 / std::tan(fov_y * 0.5));
   Mat<4, 4, T> m;
-  m.data[0] = f / static_cast<T>(aspect);
-  m.data[5] = f;
+  m.data[0]  = f / static_cast<T>(aspect);
+  m.data[5]  = f;
   m.data[10] = static_cast<T>((z_far + z_near) / (z_near - z_far));
   m.data[14] = static_cast<T>(2.0 * z_far * z_near / (z_near - z_far));
   m.data[11] = T(-1);
@@ -553,15 +535,14 @@ Mat<4, 4, T> mat4_perspective(double fov_y, double aspect, double z_near, double
 }
 
 // Orthographic projection
-template <typename T>
-Mat<4, 4, T> mat4_ortho(double left, double right, double bottom, double top, double z_near, double z_far) {
+template <typename T> Mat<4, 4, T> mat4_ortho(double left, double right, double bottom, double top, double z_near, double z_far) {
   Mat<4, 4, T> m = Mat<4, 4, T>::identity();
-  m(0, 0) = T(2.0 / (right - left));
-  m(1, 1) = T(2.0 / (top - bottom));
-  m(2, 2) = T(-2.0 / (z_far - z_near));
-  m(0, 3) = -T((right + left) / (right - left));
-  m(1, 3) = -T((top + bottom) / (top - bottom));
-  m(2, 3) = -T((z_far + z_near) / (z_far - z_near));
+  m(0, 0)        = T(2.0 / (right - left));
+  m(1, 1)        = T(2.0 / (top - bottom));
+  m(2, 2)        = T(-2.0 / (z_far - z_near));
+  m(0, 3)        = -T((right + left) / (right - left));
+  m(1, 3)        = -T((top + bottom) / (top - bottom));
+  m(2, 3)        = -T((z_far + z_near) / (z_far - z_near));
   return m;
 }
 
@@ -579,4 +560,4 @@ using Mat4d = Mat<4, 4, double>;
 using Mat3x4f = Mat<3, 4, float>;
 using Mat4x3f = Mat<4, 3, float>;
 
-}  // namespace Cutil
+} // namespace Cutil
