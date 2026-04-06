@@ -1,5 +1,5 @@
-#include <cutil/ref.hpp>
 #include <algorithm>
+#include <cutil/ref.hpp>
 #include <cutil/ref_nanobind.hpp>
 #include <cutil/string.hpp>
 #include <cutil/string_nanobind.hpp>
@@ -58,11 +58,17 @@ public:
   }
 
   std::string get_data() const { return data; }
-  DataManager* get_self() { auto ref = ref_from_this(); return ref.get(); }
+  DataManager* get_self() {
+    auto ref = ref_from_this();
+    return ref.get();
+  }
   std::string process() { return "Processing: " + data; }
   int get_counter() const { return hoge; }
   void increment() { ++hoge; }
-  void reset() { hoge = 0; data = ""; }
+  void reset() {
+    hoge = 0;
+    data = "";
+  }
 };
 
 // WeakPtr を使ったObserver
@@ -136,7 +142,7 @@ Str extract_filename(const Str& path) { return path.get_file(); }
 
 // Python モジュール定義
 NB_MODULE(mylib, m) {
-  m.doc() = "Example library using Ref<T>, Str, and nanobind";
+  m.doc()               = "Example library using Ref<T>, Str, and nanobind";
   m.attr("__version__") = "0.1.0";
 
   // Calculator クラス
@@ -203,24 +209,12 @@ NB_MODULE(mylib, m) {
   m.def("to_upper", [](const Str& s) { return s.to_upper(); });
   m.def("to_lower", [](const Str& s) { return s.to_lower(); });
   m.def("reverse_string", [](const Str& s) { return s.reverse(); });
-  m.def("concat_str", [](const Str& a, const Str& b) {
-    return a + " " + b;
-  });
-  m.def("begins_with", [](const Str& s, const Str& prefix) {
-    return s.begins_with(prefix.c_str());
-  });
-  m.def("ends_with", [](const Str& s, const Str& suffix) {
-    return s.ends_with(suffix.c_str());
-  });
-  m.def("count_substring", [](const Str& s, const Str& sub) {
-    return s.count(sub.c_str());
-  });
-  m.def("replace", [](const Str& s, const Str& from, const Str& to) {
-    return s.replace(from.c_str(), to.c_str());
-  });
-  m.def("substr", [](const Str& s, int start, int len) {
-    return s.substr(start, len);
-  });
+  m.def("concat_str", [](const Str& a, const Str& b) { return a + " " + b; });
+  m.def("begins_with", [](const Str& s, const Str& prefix) { return s.begins_with(prefix.c_str()); });
+  m.def("ends_with", [](const Str& s, const Str& suffix) { return s.ends_with(suffix.c_str()); });
+  m.def("count_substring", [](const Str& s, const Str& sub) { return s.count(sub.c_str()); });
+  m.def("replace", [](const Str& s, const Str& from, const Str& to) { return s.replace(from.c_str(), to.c_str()); });
+  m.def("substr", [](const Str& s, int start, int len) { return s.substr(start, len); });
   m.def("trim", [](const Str& s) {
     // strip_edges を使う（デフォルト引数を明示的に指定）
     return s.strip_edges(" \t\n\r\f\v");
@@ -237,7 +231,5 @@ NB_MODULE(mylib, m) {
     // Simple implementation: capitalize first letter
     return s.capitalize();
   });
-  m.def("get_filename", [](const Str& path) {
-    return path.get_file();
-  });
+  m.def("get_filename", [](const Str& path) { return path.get_file(); });
 }

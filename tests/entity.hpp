@@ -48,7 +48,7 @@ public:
   std::string name;
   float position[3] = {0.0f, 0.0f, 0.0f};
   std::vector<Ref<Mesh>> meshes;
-  WeakPtr<Model> parent;  // WeakPtr で循環参照を防止
+  WeakPtr<Model> parent; // WeakPtr で循環参照を防止
   std::vector<Ref<Model>> children;
 
   void add_child(Ref<Model> child) {
@@ -70,9 +70,7 @@ public:
   }
 
   // parent を Ref<Model> にロックする（存在確認）
-  Ref<Model> get_parent() const {
-    return parent.lock();
-  }
+  Ref<Model> get_parent() const { return parent.lock(); }
 
   template <size_t PoolSize = 64> static Ref<Model> Create(const std::string& name = "", ObjectPool<Model, PoolSize>* pool = nullptr) {
     if(!pool) {
@@ -108,7 +106,7 @@ public:
 
   void add_model(Ref<Model> model) {
     if(!model) return;
-    model->parent.reset();  // root なので parent を解放
+    model->parent.reset(); // root なので parent を解放
     root_models.push_back(model);
   }
 

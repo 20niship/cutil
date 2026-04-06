@@ -247,10 +247,10 @@ TEST_SUITE("Entity System Benchmark") {
       {
         std::vector<Ref<Model>> models;
         for(size_t i = 0; i < COUNT; ++i) {
-          auto ref                = Model::Create("model_" + std::to_string(i), &model_pool);
-          ref->position[0]        = i * 0.1f;
-          ref->position[1]        = i * 0.2f;
-          ref->position[2]        = i * 0.3f;
+          auto ref         = Model::Create("model_" + std::to_string(i), &model_pool);
+          ref->position[0] = i * 0.1f;
+          ref->position[1] = i * 0.2f;
+          ref->position[2] = i * 0.3f;
           if(ref) models.push_back(ref);
         }
 
@@ -270,11 +270,11 @@ TEST_SUITE("Entity System Benchmark") {
       Timer t;
       std::vector<Ref<Model>> models;
       for(size_t i = 0; i < COUNT; ++i) {
-        auto ref           = make_ref<Model>();
-        ref->name          = "model_" + std::to_string(i);
-        ref->position[0]   = i * 0.1f;
-        ref->position[1]   = i * 0.2f;
-        ref->position[2]   = i * 0.3f;
+        auto ref         = make_ref<Model>();
+        ref->name        = "model_" + std::to_string(i);
+        ref->position[0] = i * 0.1f;
+        ref->position[1] = i * 0.2f;
+        ref->position[2] = i * 0.3f;
         models.push_back(ref);
       }
 
@@ -334,7 +334,7 @@ TEST_SUITE("Entity System Benchmark") {
       Timer t;
       std::vector<Ref<Model>> roots;
       for(size_t i = 0; i < PARENT_COUNT; ++i) {
-        auto parent = make_ref<Model>();
+        auto parent  = make_ref<Model>();
         parent->name = "parent_" + std::to_string(i);
         for(size_t j = 0; j < CHILD_COUNT; ++j) {
           auto child  = make_ref<Model>();
