@@ -153,9 +153,9 @@ template <unsigned int Rows, unsigned int Cols, typename T> struct Mat {
 
   bool operator!=(const Mat& o) const { return !(*this == o); }
 
-  // ---- Matrix multiplication: Mat<Rows, K> * Mat<K, Cols> -> Mat<Rows, Cols> -------
+  // ---- Matrix multiplication: Mat<Rows, Cols> * Mat<Cols, K> -> Mat<Rows, K> -------
 
-  template <unsigned int K> Mat<Rows, K, T> operator*(const Mat<K, Cols, T>& B) const {
+  template <unsigned int K> Mat<Rows, K, T> operator*(const Mat<Cols, K, T>& B) const {
     Mat<Rows, K, T> result;
     detail::mat_mul_impl<Rows, Cols, K, T>(data, B.data, result.data);
     return result;
