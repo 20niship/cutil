@@ -11,7 +11,7 @@
 // Element access: (row, col) -> data[col * Rows + row]
 // SIMD-optimized for Mat<4, 4, float> with SSE2
 
-namespace Cutil {
+namespace cutil {
 
 // Forward declaration for matrix multiplication helpers
 namespace detail {
@@ -560,4 +560,4 @@ using Mat4d = Mat<4, 4, double>;
 using Mat3x4f = Mat<3, 4, float>;
 using Mat4x3f = Mat<4, 3, float>;
 
-} // namespace Cutil
+} // namespace cutil

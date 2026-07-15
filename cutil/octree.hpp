@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <vector>
 
-namespace Cutil {
+namespace cutil {
 
 inline bool isPow2(unsigned i) { return ((i - 1) & i) == 0; }
 
@@ -404,4 +404,4 @@ public:
 #endif
 };
 
-} // namespace Cutil
+} // namespace cutil

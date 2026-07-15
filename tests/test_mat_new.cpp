@@ -2,7 +2,7 @@
 #include <cutil/mat.hpp>
 #include <doctest.h>
 
-using namespace Cutil;
+using namespace cutil;
 
 // Helper: build a matrix from row-major initializer list (for readability in tests)
 // Internal storage is column-major, so this is a convenience wrapper

@@ -2,7 +2,7 @@
 
 #include "vector.hpp"
 
-namespace Cutil {
+namespace cutil {
 
 inline double RGB2H(const Vector3b& col) {
   double Hue; // 色相
@@ -119,4 +119,4 @@ template <typename T> inline Vector3b HSVtoRGB(const _Vec<T, 3>& hsv) {
 }
 
 
-} // namespace Cutil
+} // namespace cutil

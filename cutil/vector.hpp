@@ -24,7 +24,7 @@
 // #define MIN(a, b) ((a) < (b) ? (a) : (b))
 // #endif
 
-namespace Cutil {
+namespace cutil {
 #ifdef VKUI_USE_CONCEPTS
 #include <concepts>
 template <typename T>
@@ -1094,4 +1094,4 @@ template <typename T> struct uiVector {
   }
 };
 
-} // namespace Cutil
+} // namespace cutil

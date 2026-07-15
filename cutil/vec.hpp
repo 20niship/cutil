@@ -9,7 +9,7 @@
 // NVec<N, T>: N-dimensional vector with GLSL/GLM/Godot-style API
 // Namespace: Cutil
 
-namespace Cutil {
+namespace cutil {
 
 template <unsigned int N, typename T> struct NVec {
   static_assert(N > 0, "NVec: dimension N must be > 0");
@@ -426,4 +426,4 @@ using Vec2u = NVec<2, unsigned int>;
 using Vec3u = NVec<3, unsigned int>;
 using Vec4u = NVec<4, unsigned int>;
 
-} // namespace Cutil
+} // namespace cutil

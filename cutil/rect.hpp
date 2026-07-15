@@ -3,7 +3,7 @@
 #include <limits>
 #include <string>
 
-namespace Cutil {
+namespace cutil {
 struct Range {
   float min, max;
   Range() { clear(); }
@@ -117,4 +117,4 @@ struct Rect {
 };
 inline void operator|=(Rect& r1, const Rect& r2) { r1 = r1 | r2; }
 inline void operator&=(Rect& r1, const Rect& r2) { r1 = r1 & r2; }
-} // namespace Cutil
+} // namespace cutil
