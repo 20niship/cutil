@@ -14,7 +14,7 @@
 
 namespace Cutil {
 
-template <typename T> struct Quat {
+template <typename T = float> struct Quat {
   static_assert(std::is_floating_point<T>::value, "Quat: T must be a floating-point type");
 
   T x, y, z, w;
