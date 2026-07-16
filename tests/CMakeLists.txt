@@ -20,6 +20,7 @@ add_executable(tests_main
     test_rect3d.cpp
     test_path.cpp
     test_json.cpp
+    test_prop_info.cpp
     cutil_impl.cpp
 )
 
