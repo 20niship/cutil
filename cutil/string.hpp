@@ -177,7 +177,7 @@ public:
     if(is_sso()) {
       return SSO_CAPACITY;
     } else {
-      return storage_.heap.capacity;
+      return storage_.heap.capacity & ~HEAP_CAPACITY_TAG;
     }
   }
 
@@ -237,8 +237,12 @@ public:
 
     if(is_sso()) {
       // Convert SSO to heap
-      const char* old_data = storage_.sso.buf;
-      size_t old_size      = size();
+      // storage_.sso.buf と storage_.heap.ptr は同一unionメモリを共有しているため、
+      // allocate_heap()がstorage_.heap.ptr等を書き込むと元データが破壊される。
+      // そのため先にローカルバッファへ退避してからallocate_heap()を呼ぶ。
+      char old_data[SSO_CAPACITY + 1];
+      size_t old_size = size();
+      std::memcpy(old_data, storage_.sso.buf, old_size + 1); // include null terminator
       allocate_heap(new_capacity);
       std::memcpy(storage_.heap.ptr, old_data, old_size);
       storage_.heap.ptr[old_size] = '\0';
@@ -250,7 +254,7 @@ public:
         throw std::bad_alloc();
       }
       storage_.heap.ptr      = new_ptr;
-      storage_.heap.capacity = new_capacity;
+      storage_.heap.capacity = new_capacity | HEAP_CAPACITY_TAG;
     }
   }
 
@@ -1005,6 +1009,11 @@ public:
 private:
   // ========== Internal Helpers ==========
 
+  // heap.capacity の最上位byteは sso.remaining と同じbyteをaliasしているため、
+  // heap状態では最上位byteを常に0xFFに立てておくことで is_sso() の判定に使う
+  // (実際に使えるcapacityはこのタグbitをmaskして取り出す)。
+  static constexpr size_t HEAP_CAPACITY_TAG = static_cast<size_t>(0xFF) << ((sizeof(size_t) - 1) * 8);
+
   bool is_sso() const noexcept { return storage_.sso.remaining != 0xFF; }
 
   void init_sso_empty() noexcept {
@@ -1032,7 +1041,7 @@ private:
       throw std::bad_alloc();
     }
     storage_.heap.ptr      = ptr;
-    storage_.heap.capacity = new_capacity;
+    storage_.heap.capacity = new_capacity | HEAP_CAPACITY_TAG;
     storage_.heap.size     = 0;
   }
 
