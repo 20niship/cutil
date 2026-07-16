@@ -6,6 +6,7 @@
 #include <vector>
 
 #include <cutil/path.hpp>
+#include <cutil/prop_registry.hpp>
 #include <cutil/quaternion.hpp>
 #include <cutil/rect.hpp>
 #include <cutil/rect3d.hpp>
@@ -164,6 +165,7 @@ CUTIL_PROP_TRAIT(Range, PropType::Range, false);
 CUTIL_PROP_TRAIT(Rect, PropType::Rect, false);
 CUTIL_PROP_TRAIT(Rect3D, PropType::Rect3D, false);
 CUTIL_PROP_TRAIT(std::vector<uint8_t>, PropType::Binary, true);
+CUTIL_PROP_TRAIT(CustomSlot, PropType::Custom, true);
 
 #undef CUTIL_PROP_TRAIT
 
@@ -284,19 +286,14 @@ public:
   // 構造体のメモリ内でのoffsetを表す(Prop自身のdata_内offsetとは別物)。
   //
   // dump: data(構造体の生メモリ)からruleに従って値を読み取り、Prop自身にセットする。
-  // Custom型フィールドはPhase4のCustomTypeRegistry対応まではスキップされ、戻り値は
-  // falseになる(=完全にはdumpできなかったことを示す)。
+  // PropType::CustomなフィールドはCustomSlotとして呼び出し側の構造体に直接埋め込まれて
+  // いる前提で扱う(ruleのis_pointer/sizeはCustomSlot自身のものを指定する)。
   bool dump(const void* data, const PropInfoList* rule) {
     const auto* base = reinterpret_cast<const uint8_t*>(data);
-    bool complete     = true;
     for(const auto& src_info : *rule) {
-      if(src_info.type == PropType::Custom) {
-        complete = false; // Phase 4で対応
-        continue;
-      }
       set_raw(src_info, base + src_info.offset);
     }
-    return complete;
+    return true;
   }
 
   // load_to: Prop自身が持つ値を、ruleに従って構造体(data)の生メモリへ書き込む。
@@ -308,10 +305,6 @@ public:
     auto* base    = reinterpret_cast<uint8_t*>(data);
     bool complete = true;
     for(const auto& dst_info : *rule) {
-      if(dst_info.type == PropType::Custom) {
-        complete = false; // Phase 4で対応
-        continue;
-      }
       const PropInfo* info = find_info(infos_, dst_info.name);
       if(!info || info->type != dst_info.type) {
         complete = false;
@@ -385,7 +378,7 @@ private:
       case PropType::Path: new(dst) Path(*reinterpret_cast<const Path*>(src)); break;
       case PropType::Binary: new(dst) std::vector<uint8_t>(*reinterpret_cast<const std::vector<uint8_t>*>(src)); break;
       case PropType::Nested: new(dst) Prop(*reinterpret_cast<const Prop*>(src)); break;
-      case PropType::Custom: throw std::logic_error("Prop: Custom type is not yet supported (Phase 4)");
+      case PropType::Custom: new(dst) CustomSlot(*reinterpret_cast<const CustomSlot*>(src)); break;
       default: break; // POD型はここに来ない
     }
   }
@@ -396,8 +389,8 @@ private:
       case PropType::Path: reinterpret_cast<Path*>(obj)->~Path(); break;
       case PropType::Binary: reinterpret_cast<std::vector<uint8_t>*>(obj)->~vector(); break;
       case PropType::Nested: reinterpret_cast<Prop*>(obj)->~Prop(); break;
-      case PropType::Custom: break; // Phase 4
-      default: break;               // POD型はここに来ない
+      case PropType::Custom: reinterpret_cast<CustomSlot*>(obj)->~CustomSlot(); break;
+      default: break; // POD型はここに来ない
     }
   }
 
@@ -410,9 +403,48 @@ private:
       case PropType::Path: *reinterpret_cast<Path*>(dst) = *reinterpret_cast<const Path*>(src); break;
       case PropType::Binary: *reinterpret_cast<std::vector<uint8_t>*>(dst) = *reinterpret_cast<const std::vector<uint8_t>*>(src); break;
       case PropType::Nested: *reinterpret_cast<Prop*>(dst) = *reinterpret_cast<const Prop*>(src); break;
-      case PropType::Custom: throw std::logic_error("Prop: Custom type is not yet supported (Phase 4)");
+      case PropType::Custom: *reinterpret_cast<CustomSlot*>(dst) = *reinterpret_cast<const CustomSlot*>(src); break;
       default: break; // POD型はここに来ない
     }
+  }
+
+public:
+  // Custom型(CustomTypeRegistryに登録済みの任意の型)のフィールドをセットする。
+  // 組み込み型のset<T>とは異なり、type_nameを明示的に指定してレジストリ経由で
+  // コピー構築/破棄を行う。
+  template <typename T> void set_custom(const char* name, const char* type_name, const T& value, const char* label = nullptr, const char* desc = nullptr) {
+    CustomSlot slot   = CustomSlot::make<T>(type_name, value);
+    PropInfo* info    = find_info(infos_, name);
+    bool is_new_field = false;
+    if(!info) {
+      info = &add_field(name, PropType::Custom, sizeof(CustomSlot), alignof(CustomSlot), true);
+      std::strncpy(info->custom_type_name, type_name, sizeof(info->custom_type_name) - 1);
+      if(label) info->set_label(label);
+      if(desc) info->set_desc(desc);
+      is_new_field = true;
+    } else if(info->type != PropType::Custom) {
+      throw std::logic_error(std::string("Prop::set_custom: field '") + name + "' already exists with a different type");
+    }
+    uint8_t* dst = data_.data() + info->offset;
+    if(is_new_field) {
+      new(dst) CustomSlot(std::move(slot));
+    } else {
+      *reinterpret_cast<CustomSlot*>(dst) = std::move(slot);
+    }
+  }
+
+  template <typename T> [[nodiscard]] T& get_custom(const char* name) {
+    PropInfo* info = find_info(infos_, name);
+    if(!info) throw std::out_of_range(std::string("Prop: field not found: ") + name);
+    if(info->type != PropType::Custom) throw std::logic_error(std::string("Prop::get_custom: field '") + name + "' is not a Custom field");
+    return reinterpret_cast<CustomSlot*>(data_.data() + info->offset)->get<T>();
+  }
+
+  template <typename T> [[nodiscard]] const T& get_custom(const char* name) const {
+    const PropInfo* info = find_info(infos_, name);
+    if(!info) throw std::out_of_range(std::string("Prop: field not found: ") + name);
+    if(info->type != PropType::Custom) throw std::logic_error(std::string("Prop::get_custom: field '") + name + "' is not a Custom field");
+    return reinterpret_cast<const CustomSlot*>(data_.data() + info->offset)->get<T>();
   }
 };
 
@@ -436,7 +468,7 @@ inline size_t prop_type_size(PropType type) {
     case PropType::Rect3D: return sizeof(Rect3D);
     case PropType::Binary: return sizeof(std::vector<uint8_t>);
     case PropType::Nested: return sizeof(Prop);
-    case PropType::Custom: return 0; // Phase4: CustomTypeRegistryから取得する
+    case PropType::Custom: return sizeof(CustomSlot); // CustomSlot自体は保持する型に依らず固定サイズ
   }
   return 0;
 }
@@ -456,7 +488,7 @@ inline size_t prop_type_align(PropType type) {
     case PropType::Rect3D: return alignof(Rect3D);
     case PropType::Binary: return alignof(std::vector<uint8_t>);
     case PropType::Nested: return alignof(Prop);
-    case PropType::Custom: return 1; // Phase4: CustomTypeRegistryから取得する
+    case PropType::Custom: return alignof(CustomSlot);
   }
   return 1;
 }
