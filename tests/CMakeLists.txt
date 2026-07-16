@@ -19,11 +19,13 @@ add_executable(tests_main
     test_quaternion.cpp
     test_rect3d.cpp
     test_path.cpp
+    test_json.cpp
     cutil_impl.cpp
 )
 
 # Link doctest header
 target_include_directories(tests_main PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../ext)
+target_include_directories(tests_main PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../ext/json/single_include)
 
 # Register tests
 add_test(NAME tests COMMAND tests_main)
