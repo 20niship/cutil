@@ -167,6 +167,11 @@ CUTIL_PROP_TRAIT(std::vector<uint8_t>, PropType::Binary, true);
 
 #undef CUTIL_PROP_TRAIT
 
+// 実行時のPropTypeからsize/alignを引く(Prop::dump()が新規フィールドを追加する際に使う)。
+// 定義はProp classの後(sizeof(Prop)を使うため)。
+size_t prop_type_size(PropType type);
+size_t prop_type_align(PropType type);
+
 // Prop - DNA相当。生バイナリバッファ(data_)とPropInfoList(infos_)を保持する
 // 動的プロパティコンテナ。名前でフィールドを出し入れする(Blenderのカスタム
 // プロパティ相当)ほか、別のPropを子として持てる(PropType::Nestedによる
@@ -273,6 +278,56 @@ public:
   Prop& get_child(const char* name) { return get<Prop>(name); }
   [[nodiscard]] const Prop& get_child(const char* name) const { return get<Prop>(name); }
 
+  // 外部C++構造体との高速相互変換。
+  // rule(PropInfoList)は呼び出し側の構造体用に型ごとに一度だけ静的に生成される想定
+  // (offsetofで各フィールドのoffsetを記述したもの)。rule::offsetは`data`が指す
+  // 構造体のメモリ内でのoffsetを表す(Prop自身のdata_内offsetとは別物)。
+  //
+  // dump: data(構造体の生メモリ)からruleに従って値を読み取り、Prop自身にセットする。
+  // Custom型フィールドはPhase4のCustomTypeRegistry対応まではスキップされ、戻り値は
+  // falseになる(=完全にはdumpできなかったことを示す)。
+  bool dump(const void* data, const PropInfoList* rule) {
+    const auto* base = reinterpret_cast<const uint8_t*>(data);
+    bool complete     = true;
+    for(const auto& src_info : *rule) {
+      if(src_info.type == PropType::Custom) {
+        complete = false; // Phase 4で対応
+        continue;
+      }
+      set_raw(src_info, base + src_info.offset);
+    }
+    return complete;
+  }
+
+  // load_to: Prop自身が持つ値を、ruleに従って構造体(data)の生メモリへ書き込む。
+  // dataは既に構築済み(コンストラクタが走っている)オブジェクトへのポインタである
+  // ことを前提とする(ポインタ型フィールドはコピー代入で書き込む)。
+  // Propに該当フィールドが無い/型が一致しない場合はそのフィールドをスキップし、
+  // 戻り値はfalseになる。
+  [[nodiscard]] bool load_to(void* data, const PropInfoList* rule) const {
+    auto* base    = reinterpret_cast<uint8_t*>(data);
+    bool complete = true;
+    for(const auto& dst_info : *rule) {
+      if(dst_info.type == PropType::Custom) {
+        complete = false; // Phase 4で対応
+        continue;
+      }
+      const PropInfo* info = find_info(infos_, dst_info.name);
+      if(!info || info->type != dst_info.type) {
+        complete = false;
+        continue;
+      }
+      const uint8_t* src = data_.data() + info->offset;
+      uint8_t* dst        = base + dst_info.offset;
+      if(info->is_pointer) {
+        assign_by_type(info->type, dst, src);
+      } else {
+        std::memcpy(dst, src, info->size);
+      }
+    }
+    return complete;
+  }
+
 private:
   std::vector<uint8_t> data_;
   PropInfoList infos_;
@@ -282,6 +337,38 @@ private:
     data_.resize(new_offset + sz, 0);
     infos_.emplace_back(name, type, new_offset, sz, is_pointer_);
     return infos_.back();
+  }
+
+  // dump()から呼ばれる、実行時PropTypeに基づく汎用set。set<T>()と異なりコンパイル時の
+  // 型情報を使わない(呼び出し元の構造体のフィールドをPropTypeのタグだけを頼りに
+  // 読み込むため)。
+  void set_raw(const PropInfo& src_info, const void* src_ptr) {
+    PropInfo* info    = find_info(infos_, src_info.name);
+    bool is_new_field = false;
+    if(!info) {
+      info = &add_field(src_info.name, src_info.type, prop_type_size(src_info.type), prop_type_align(src_info.type), src_info.is_pointer);
+      info->widget     = src_info.widget;
+      info->flags      = src_info.flags;
+      info->min_value  = src_info.min_value;
+      info->max_value  = src_info.max_value;
+      info->drag_speed = src_info.drag_speed;
+      std::memcpy(info->label, src_info.label, sizeof(info->label));
+      std::memcpy(info->desc, src_info.desc, sizeof(info->desc));
+      is_new_field = true;
+    } else if(info->type != src_info.type) {
+      throw std::logic_error(std::string("Prop::dump: field '") + src_info.name + "' already exists with a different type");
+    }
+
+    uint8_t* dst = data_.data() + info->offset;
+    if(info->is_pointer) {
+      if(is_new_field) {
+        copy_construct_by_type(info->type, dst, src_ptr);
+      } else {
+        assign_by_type(info->type, dst, src_ptr);
+      }
+    } else {
+      std::memcpy(dst, src_ptr, info->size);
+    }
   }
 
   void destroy_all_pointer_fields() {
@@ -313,11 +400,65 @@ private:
       default: break;               // POD型はここに来ない
     }
   }
+
+  // is_pointer==trueな型への「既に生存しているオブジェクトへのコピー代入」。
+  // load_to()は呼び出し元の構造体が既に構築済みであることを前提とするため、
+  // placement-newではなくoperator=を使う。
+  static void assign_by_type(PropType type, void* dst, const void* src) {
+    switch(type) {
+      case PropType::Str: *reinterpret_cast<Str*>(dst) = *reinterpret_cast<const Str*>(src); break;
+      case PropType::Path: *reinterpret_cast<Path*>(dst) = *reinterpret_cast<const Path*>(src); break;
+      case PropType::Binary: *reinterpret_cast<std::vector<uint8_t>*>(dst) = *reinterpret_cast<const std::vector<uint8_t>*>(src); break;
+      case PropType::Nested: *reinterpret_cast<Prop*>(dst) = *reinterpret_cast<const Prop*>(src); break;
+      case PropType::Custom: throw std::logic_error("Prop: Custom type is not yet supported (Phase 4)");
+      default: break; // POD型はここに来ない
+    }
+  }
 };
 
 template <> struct prop_type_traits<Prop> {
   static constexpr PropType type   = PropType::Nested;
   static constexpr bool is_pointer = true;
 };
+
+inline size_t prop_type_size(PropType type) {
+  switch(type) {
+    case PropType::Bool: return sizeof(bool);
+    case PropType::Int: return sizeof(int32_t);
+    case PropType::Float: return sizeof(float);
+    case PropType::Str: return sizeof(Str);
+    case PropType::Path: return sizeof(Path);
+    case PropType::Vec3: return sizeof(Vec3f);
+    case PropType::Vec4: return sizeof(Vec4f);
+    case PropType::Quat: return sizeof(Quat<float>);
+    case PropType::Range: return sizeof(Range);
+    case PropType::Rect: return sizeof(Rect);
+    case PropType::Rect3D: return sizeof(Rect3D);
+    case PropType::Binary: return sizeof(std::vector<uint8_t>);
+    case PropType::Nested: return sizeof(Prop);
+    case PropType::Custom: return 0; // Phase4: CustomTypeRegistryから取得する
+  }
+  return 0;
+}
+
+inline size_t prop_type_align(PropType type) {
+  switch(type) {
+    case PropType::Bool: return alignof(bool);
+    case PropType::Int: return alignof(int32_t);
+    case PropType::Float: return alignof(float);
+    case PropType::Str: return alignof(Str);
+    case PropType::Path: return alignof(Path);
+    case PropType::Vec3: return alignof(Vec3f);
+    case PropType::Vec4: return alignof(Vec4f);
+    case PropType::Quat: return alignof(Quat<float>);
+    case PropType::Range: return alignof(Range);
+    case PropType::Rect: return alignof(Rect);
+    case PropType::Rect3D: return alignof(Rect3D);
+    case PropType::Binary: return alignof(std::vector<uint8_t>);
+    case PropType::Nested: return alignof(Prop);
+    case PropType::Custom: return 1; // Phase4: CustomTypeRegistryから取得する
+  }
+  return 1;
+}
 
 } // namespace cutil
