@@ -2,7 +2,7 @@
 #include <cutil/vec.hpp>
 #include <doctest.h>
 
-using namespace Cutil;
+using namespace cutil;
 
 TEST_SUITE("NVec - Constructors") {
   TEST_CASE("Default constructor") {

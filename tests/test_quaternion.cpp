@@ -2,7 +2,7 @@
 #include <cutil/quaternion.hpp>
 #include <doctest.h>
 
-using namespace Cutil;
+using namespace cutil;
 
 namespace {
 constexpr double kPi = 3.14159265358979323846;

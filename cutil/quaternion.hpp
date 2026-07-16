@@ -12,7 +12,7 @@
 // Storage order: x, y, z, w (w last, matching Godot::Quaternion)
 // Namespace: Cutil
 
-namespace Cutil {
+namespace cutil {
 
 template <typename T = float> struct Quat {
   static_assert(std::is_floating_point<T>::value, "Quat: T must be a floating-point type");
@@ -262,4 +262,4 @@ template <typename T> Mat<4, 4, T> mat4_rotation(const Quat<T>& q) { return q.to
 using Quatf = Quat<float>;
 using Quatd = Quat<double>;
 
-} // namespace Cutil
+} // namespace cutil
