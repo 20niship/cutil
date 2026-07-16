@@ -561,4 +561,30 @@ TEST_SUITE("Str - Memory Safety") {
     }
     CHECK(s.size() > 22);
   }
+
+  TEST_CASE("Construct directly from a long (heap) C-string preserves content") {
+    // 23文字以上はheapへ移行するパス。is_sso()判定用のheap.capacityタグが
+    // 正しく立っていないと内容が破壊される(回帰テスト)。
+    const char* long_str = "/Users/example/Desktop/some/very/long/path.txt";
+    Str s(long_str);
+    CHECK(s.size() == std::strlen(long_str));
+    CHECK(s == long_str);
+  }
+
+  TEST_CASE("Append crossing SSO threshold preserves original prefix") {
+    // SSO->heap移行時、旧データをallocate_heap()呼び出し前に退避しないと
+    // union内で自己上書きが発生し、先頭バイトが破壊される(回帰テスト)。
+    Str s("short");
+    s += " this will exceed sso capacity and force heap allocation";
+    CHECK(s.size() > 22);
+    Str expected("short this will exceed sso capacity and force heap allocation");
+    CHECK(s == expected);
+  }
+
+  TEST_CASE("capacity() after heap conversion is not polluted by internal tag") {
+    Str s("short");
+    s += " this will exceed sso capacity and force heap allocation";
+    CHECK(s.capacity() >= s.size());
+    CHECK(s.capacity() < (size_t(1) << 32)); // タグbitが混入していれば桁違いに大きくなる
+  }
 }
