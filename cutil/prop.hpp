@@ -275,6 +275,15 @@ public:
   [[nodiscard]] const PropInfoList& infos() const { return infos_; }
   [[nodiscard]] size_t field_count() const { return infos_.size(); }
 
+  // フィールドのversionを直接書き換える(cutil/prop_io.hpp のJSON経由load(Phase6)が、
+  // JSON側に記録されていたversionをPropInfoへ反映するために使う)。
+  bool set_field_version(const char* name, uint32_t version) {
+    PropInfo* info = find_info(infos_, name);
+    if(!info) return false;
+    info->version = version;
+    return true;
+  }
+
   // Prop自身の生バイナリバッファへの読み取り専用アクセス。cutil/prop_io.hpp の
   // binary dump/load(Phase5以降)が、POD型フィールドの実データをそのままファイルへ
   // コピーするために使う。
@@ -464,6 +473,27 @@ public:
     if(!info) throw std::out_of_range(std::string("Prop: field not found: ") + name);
     if(info->type != PropType::Custom) throw std::logic_error(std::string("Prop::get_custom: field '") + name + "' is not a Custom field");
     return reinterpret_cast<const CustomSlot*>(data_.data() + info->offset)->get<T>();
+  }
+
+  // 既に構築済みのCustomSlotを、名前付きフィールドとして取り込む(所有権を移動)。
+  // cutil/prop_io.hpp のJSON経由load(Phase 6)が、CustomTypeOps::from_json経由で
+  // 構築したCustomSlotをPropへ組み込む際に使う。
+  void adopt_custom_slot(const char* name, const char* custom_type_name, CustomSlot&& slot) {
+    PropInfo* info    = find_info(infos_, name);
+    bool is_new_field = false;
+    if(!info) {
+      info = &add_field(name, PropType::Custom, sizeof(CustomSlot), alignof(CustomSlot), true);
+      std::strncpy(info->custom_type_name, custom_type_name, sizeof(info->custom_type_name) - 1);
+      is_new_field = true;
+    } else if(info->type != PropType::Custom) {
+      throw std::logic_error(std::string("Prop::adopt_custom_slot: field '") + name + "' already exists with a different type");
+    }
+    uint8_t* dst = data_.data() + info->offset;
+    if(is_new_field) {
+      new(dst) CustomSlot(std::move(slot));
+    } else {
+      *reinterpret_cast<CustomSlot*>(dst) = std::move(slot);
+    }
   }
 };
 
