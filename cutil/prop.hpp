@@ -2,7 +2,15 @@
 
 #include <cstdint>
 #include <cstring>
+#include <stdexcept>
 #include <vector>
+
+#include <cutil/path.hpp>
+#include <cutil/quaternion.hpp>
+#include <cutil/rect.hpp>
+#include <cutil/rect3d.hpp>
+#include <cutil/string.hpp>
+#include <cutil/vec.hpp>
 
 // cutil::Prop / cutil::PropInfo: Blender の DNA/RNA に相当するシリアライズシステム。
 //
@@ -133,5 +141,183 @@ inline bool validate(const PropInfo& info, float value) {
   if(info.min_value == 0 && info.max_value == 0) return true; // 範囲未設定は無条件許可
   return value >= info.min_value && value <= info.max_value;
 }
+
+// C++の型 T <-> PropType の対応。Prop::set<T>/get<T>で使う。
+// 新しい組み込み型を追加する場合はここに特殊化を追加する。
+template <typename T> struct prop_type_traits; // 未特殊化の型はコンパイルエラーになる
+
+#define CUTIL_PROP_TRAIT(CPP_TYPE, PROP_TYPE, IS_POINTER) \
+  template <> struct prop_type_traits<CPP_TYPE> {         \
+    static constexpr PropType type   = PROP_TYPE;         \
+    static constexpr bool is_pointer = IS_POINTER;        \
+  }
+
+CUTIL_PROP_TRAIT(bool, PropType::Bool, false);
+CUTIL_PROP_TRAIT(int32_t, PropType::Int, false);
+CUTIL_PROP_TRAIT(float, PropType::Float, false);
+CUTIL_PROP_TRAIT(Str, PropType::Str, true);
+CUTIL_PROP_TRAIT(Path, PropType::Path, true);
+CUTIL_PROP_TRAIT(Vec3f, PropType::Vec3, false);
+CUTIL_PROP_TRAIT(Vec4f, PropType::Vec4, false);
+CUTIL_PROP_TRAIT(Quat<float>, PropType::Quat, false);
+CUTIL_PROP_TRAIT(Range, PropType::Range, false);
+CUTIL_PROP_TRAIT(Rect, PropType::Rect, false);
+CUTIL_PROP_TRAIT(Rect3D, PropType::Rect3D, false);
+CUTIL_PROP_TRAIT(std::vector<uint8_t>, PropType::Binary, true);
+
+#undef CUTIL_PROP_TRAIT
+
+// Prop - DNA相当。生バイナリバッファ(data_)とPropInfoList(infos_)を保持する
+// 動的プロパティコンテナ。名前でフィールドを出し入れする(Blenderのカスタム
+// プロパティ相当)ほか、別のPropを子として持てる(PropType::Nestedによる
+// 階層構造)。
+class Prop {
+public:
+  Prop() = default;
+
+  Prop(const Prop& other) : data_(other.data_.size()), infos_(other.infos_) {
+    for(const auto& info : infos_) {
+      const uint8_t* src = other.data_.data() + info.offset;
+      uint8_t* dst        = data_.data() + info.offset;
+      if(info.is_pointer) {
+        copy_construct_by_type(info.type, dst, src);
+      } else {
+        std::memcpy(dst, src, info.size);
+      }
+    }
+  }
+
+  Prop(Prop&& other) noexcept : data_(std::move(other.data_)), infos_(std::move(other.infos_)) {}
+
+  Prop& operator=(const Prop& other) {
+    if(this != &other) {
+      Prop tmp(other);
+      swap(tmp);
+    }
+    return *this;
+  }
+
+  Prop& operator=(Prop&& other) noexcept {
+    if(this != &other) {
+      destroy_all_pointer_fields();
+      data_  = std::move(other.data_);
+      infos_ = std::move(other.infos_);
+    }
+    return *this;
+  }
+
+  ~Prop() { destroy_all_pointer_fields(); }
+
+  void swap(Prop& other) noexcept {
+    data_.swap(other.data_);
+    infos_.swap(other.infos_);
+  }
+
+  template <typename T> void set(const char* name, const T& value, const char* label = nullptr, const char* desc = nullptr) {
+    using Traits    = prop_type_traits<T>;
+    PropInfo* info  = find_info(infos_, name);
+    bool is_new_field = false;
+    if(!info) {
+      info = &add_field(name, Traits::type, sizeof(T), alignof(T), Traits::is_pointer);
+      if(label) info->set_label(label);
+      if(desc) info->set_desc(desc);
+      is_new_field = true;
+    } else if(info->type != Traits::type) {
+      throw std::logic_error(std::string("Prop::set: field '") + name + "' already exists with a different type");
+    }
+
+    uint8_t* dst = data_.data() + info->offset;
+    if constexpr(Traits::is_pointer) {
+      if(is_new_field) {
+        new(dst) T(value); // 新規フィールドはまだ生存オブジェクトがないためplacement-new
+      } else {
+        *reinterpret_cast<T*>(dst) = value; // 既存フィールドはコピー代入(placement-newだと旧値がリークする)
+      }
+    } else {
+      std::memcpy(dst, &value, sizeof(T));
+    }
+  }
+
+  template <typename T> T& get(const char* name) {
+    PropInfo* info = find_info(infos_, name);
+    if(!info) throw std::out_of_range(std::string("Prop: field not found: ") + name);
+    if(info->type != prop_type_traits<T>::type) throw std::logic_error(std::string("Prop::get: field '") + name + "' has a different type");
+    return *reinterpret_cast<T*>(data_.data() + info->offset);
+  }
+
+  template <typename T> const T& get(const char* name) const {
+    const PropInfo* info = find_info(infos_, name);
+    if(!info) throw std::out_of_range(std::string("Prop: field not found: ") + name);
+    if(info->type != prop_type_traits<T>::type) throw std::logic_error(std::string("Prop::get: field '") + name + "' has a different type");
+    return *reinterpret_cast<const T*>(data_.data() + info->offset);
+  }
+
+  [[nodiscard]] bool contains(const char* name) const { return find_info(infos_, name) != nullptr; }
+
+  bool erase(const char* name) {
+    for(auto it = infos_.begin(); it != infos_.end(); ++it) {
+      if(std::strncmp(it->name, name, sizeof(it->name)) == 0) {
+        if(it->is_pointer) destroy_by_type(it->type, data_.data() + it->offset);
+        infos_.erase(it);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  [[nodiscard]] const PropInfoList& infos() const { return infos_; }
+  [[nodiscard]] size_t field_count() const { return infos_.size(); }
+
+  // 階層構造: 子Propを名前付きフィールドとして持てる (PropType::Nested)
+  void set_child(const char* name, const Prop& child) { set<Prop>(name, child); }
+  Prop& get_child(const char* name) { return get<Prop>(name); }
+  [[nodiscard]] const Prop& get_child(const char* name) const { return get<Prop>(name); }
+
+private:
+  std::vector<uint8_t> data_;
+  PropInfoList infos_;
+
+  PropInfo& add_field(const char* name, PropType type, size_t sz, size_t align, bool is_pointer_) {
+    size_t new_offset = align_up(data_.size(), align);
+    data_.resize(new_offset + sz, 0);
+    infos_.emplace_back(name, type, new_offset, sz, is_pointer_);
+    return infos_.back();
+  }
+
+  void destroy_all_pointer_fields() {
+    for(const auto& info : infos_) {
+      if(info.is_pointer) destroy_by_type(info.type, data_.data() + info.offset);
+    }
+  }
+
+  // is_pointer==trueな型(Str/Path/Binary/Nested)のコピー構築/破棄をPropType経由で
+  // ディスパッチする。Custom型(型消去)はPhase4のCustomTypeRegistryで対応する。
+  static void copy_construct_by_type(PropType type, void* dst, const void* src) {
+    switch(type) {
+      case PropType::Str: new(dst) Str(*reinterpret_cast<const Str*>(src)); break;
+      case PropType::Path: new(dst) Path(*reinterpret_cast<const Path*>(src)); break;
+      case PropType::Binary: new(dst) std::vector<uint8_t>(*reinterpret_cast<const std::vector<uint8_t>*>(src)); break;
+      case PropType::Nested: new(dst) Prop(*reinterpret_cast<const Prop*>(src)); break;
+      case PropType::Custom: throw std::logic_error("Prop: Custom type is not yet supported (Phase 4)");
+      default: break; // POD型はここに来ない
+    }
+  }
+
+  static void destroy_by_type(PropType type, void* obj) {
+    switch(type) {
+      case PropType::Str: reinterpret_cast<Str*>(obj)->~Str(); break;
+      case PropType::Path: reinterpret_cast<Path*>(obj)->~Path(); break;
+      case PropType::Binary: reinterpret_cast<std::vector<uint8_t>*>(obj)->~vector(); break;
+      case PropType::Nested: reinterpret_cast<Prop*>(obj)->~Prop(); break;
+      case PropType::Custom: break; // Phase 4
+      default: break;               // POD型はここに来ない
+    }
+  }
+};
+
+template <> struct prop_type_traits<Prop> {
+  static constexpr PropType type   = PropType::Nested;
+  static constexpr bool is_pointer = true;
+};
 
 } // namespace cutil

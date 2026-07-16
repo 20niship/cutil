@@ -21,6 +21,7 @@ add_executable(tests_main
     test_path.cpp
     test_json.cpp
     test_prop_info.cpp
+    test_prop.cpp
     cutil_impl.cpp
 )
 
