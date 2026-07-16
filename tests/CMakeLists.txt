@@ -26,6 +26,7 @@ add_executable(tests_main
     test_prop_registry.cpp
     test_prop_binary.cpp
     test_prop_json.cpp
+    test_prop_pointer_binary.cpp
     cutil_impl.cpp
 )
 

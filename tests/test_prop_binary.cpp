@@ -41,21 +41,18 @@ TEST_SUITE("prop_dump_binary / prop_load_binary - POD only") {
     CHECK(b.get<Rect3D>("bbox").x.max == doctest::Approx(1.0f));
   }
 
-  TEST_CASE("pointer-type fields are skipped and reported") {
+  TEST_CASE("pointer-type fields (Str) round-trip via the pointer blob path") {
     Prop a;
     a.set<int32_t>("hp", 1);
     a.set<cutil::Str>("name", cutil::Str("hello"));
 
     std::vector<uint8_t> bytes;
-    std::vector<std::string> skipped;
-    CHECK(cutil::prop_dump_binary(a, bytes, &skipped));
-    REQUIRE(skipped.size() == 1);
-    CHECK(skipped[0] == "name");
+    CHECK(cutil::prop_dump_binary(a, bytes));
 
     Prop b;
     CHECK(cutil::prop_load_binary(b, bytes));
     CHECK(b.get<int32_t>("hp") == 1);
-    CHECK(!b.contains("name"));
+    CHECK(b.get<cutil::Str>("name") == "hello");
   }
 
   TEST_CASE("load with corrupted magic falls back") {
