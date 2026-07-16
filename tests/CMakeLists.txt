@@ -17,6 +17,9 @@ add_executable(tests_main
     test_hash_map.cpp
     test_dictionary.cpp
     test_quaternion.cpp
+    test_rect3d.cpp
+    test_path.cpp
+    cutil_impl.cpp
 )
 
 # Link doctest header
