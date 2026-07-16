@@ -275,6 +275,25 @@ public:
   [[nodiscard]] const PropInfoList& infos() const { return infos_; }
   [[nodiscard]] size_t field_count() const { return infos_.size(); }
 
+  // Prop自身の生バイナリバッファへの読み取り専用アクセス。cutil/prop_io.hpp の
+  // binary dump/load(Phase5以降)が、POD型フィールドの実データをそのままファイルへ
+  // コピーするために使う。
+  [[nodiscard]] const uint8_t* raw_data() const { return data_.data(); }
+  [[nodiscard]] size_t raw_size() const { return data_.size(); }
+
+  // POD型のみ対応の汎用バイナリload(cutil/prop_io.hppが使う)。ポインタ型は
+  // 非対応(呼び出し元でチェックすること)。
+  void set_raw_pod(const char* name, PropType type, const void* bytes, size_t size) {
+    if(prop_type_is_pointer(type)) throw std::logic_error(std::string("Prop::set_raw_pod: '") + name + "' is a pointer type, not supported here");
+    PropInfo* info = find_info(infos_, name);
+    if(!info) {
+      info = &add_field(name, type, size, prop_type_align(type), false);
+    } else if(info->type != type) {
+      throw std::logic_error(std::string("Prop::set_raw_pod: field '") + name + "' already exists with a different type");
+    }
+    std::memcpy(data_.data() + info->offset, bytes, size);
+  }
+
   // 階層構造: 子Propを名前付きフィールドとして持てる (PropType::Nested)
   void set_child(const char* name, const Prop& child) { set<Prop>(name, child); }
   Prop& get_child(const char* name) { return get<Prop>(name); }
