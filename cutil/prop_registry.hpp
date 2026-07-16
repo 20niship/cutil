@@ -19,12 +19,17 @@
 namespace cutil {
 
 struct CustomTypeOps {
-  size_t size                                        = 0;
-  size_t align                                        = 1;
-  void (*copy_ctor)(void* dst, const void* src)       = nullptr;
-  void (*dtor)(void* obj)                             = nullptr;
-  std::string (*to_json)(const void* obj)             = nullptr; // Phase 6で使用
-  bool (*from_json)(void* obj, const std::string& j)  = nullptr; // Phase 6で使用
+  size_t size                                  = 0;
+  size_t align                                 = 1;
+  void (*copy_ctor)(void* dst, const void* src) = nullptr;
+  void (*dtor)(void* obj)                       = nullptr;
+  // to_json: obj(構築済みのTインスタンス)をJSON文字列へ変換する。
+  std::string (*to_json)(const void* obj) = nullptr;
+  // from_json: 未構築(malloc直後)のobjへ、jのパース結果を元にTを
+  // placement-newで構築する。呼び出し側は既存オブジェクトの破棄を行わないため、
+  // 実装は必ず `new(obj) T(...)` の形でobjに新規構築すること(objへの
+  // 代入ではない点に注意)。
+  bool (*from_json)(void* obj, const std::string& j) = nullptr;
 };
 
 class CustomTypeRegistry {
@@ -104,6 +109,30 @@ struct CustomSlot {
     if(!slot.ptr) throw std::bad_alloc();
     ops->copy_ctor(slot.ptr, &value);
     return slot;
+  }
+
+  // to_jsonでダンプされたJSON文字列から、CustomTypeOps::from_json経由で
+  // インスタンスを再構築する(Phase 6のJSONフォールバックで使用)。
+  static CustomSlot make_from_json(const char* type_name_, const std::string& json_text) {
+    CustomSlot slot;
+    std::strncpy(slot.type_name, type_name_, sizeof(slot.type_name) - 1);
+    const CustomTypeOps* ops = CustomTypeRegistry::instance().find(slot.type_name);
+    if(!ops) throw std::logic_error(std::string("CustomSlot: type not registered: ") + type_name_);
+    if(!ops->from_json) throw std::logic_error(std::string("CustomSlot: type has no from_json registered: ") + type_name_);
+    slot.ptr = std::malloc(ops->size);
+    if(!slot.ptr) throw std::bad_alloc();
+    if(!ops->from_json(slot.ptr, json_text)) {
+      std::free(slot.ptr);
+      slot.ptr = nullptr;
+      throw std::logic_error(std::string("CustomSlot: from_json failed for type: ") + type_name_);
+    }
+    return slot;
+  }
+
+  [[nodiscard]] std::string to_json() const {
+    const CustomTypeOps* ops = CustomTypeRegistry::instance().find(type_name);
+    if(!ops || !ops->to_json) throw std::logic_error(std::string("CustomSlot: type has no to_json registered: ") + type_name);
+    return ops->to_json(ptr);
   }
 
   template <typename T> [[nodiscard]] T& get() { return *reinterpret_cast<T*>(ptr); }
