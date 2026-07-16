@@ -24,6 +24,7 @@ add_executable(tests_main
     test_prop.cpp
     test_prop_dump_load.cpp
     test_prop_registry.cpp
+    test_prop_binary.cpp
     cutil_impl.cpp
 )
 
