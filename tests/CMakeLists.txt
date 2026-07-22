@@ -11,6 +11,7 @@ add_executable(tests_main
     test_pool.cpp
     test_entity.cpp
     test_entity_benchmark.cpp
+    test_entity_prop.cpp
     test_vec_new.cpp
     test_mat_new.cpp
     test_variant.cpp
@@ -26,6 +27,7 @@ add_executable(tests_main
     test_prop_registry.cpp
     test_prop_binary.cpp
     test_prop_json.cpp
+    test_prop_pointer_binary.cpp
     cutil_impl.cpp
 )
 

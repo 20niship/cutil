@@ -4,7 +4,7 @@
 
 using cutil::Path;
 using cutil::Prop;
-using cutil::PropInfoList;
+using cutil::PropInfo;
 using cutil::PropType;
 using cutil::Quat;
 using cutil::Rect3D;
@@ -28,8 +28,8 @@ struct Model3D {
 };
 
 // 型ごとに一度だけ静的に生成される「ルール」。
-const PropInfoList& Model3DInfo() {
-  static const PropInfoList rule = {
+const PropInfo& Model3DInfo() {
+  static const PropInfo rule = {
       {"pos", PropType::Vec3, offsetof(Model3D, pos), sizeof(Model3D::pos), false},
       {"scale", PropType::Vec3, offsetof(Model3D, scale), sizeof(Model3D::scale), false},
       {"quat", PropType::Quat, offsetof(Model3D, quat), sizeof(Model3D::quat), false},
