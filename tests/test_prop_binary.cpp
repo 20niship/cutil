@@ -89,7 +89,7 @@ TEST_SUITE("prop_dump_binary / prop_load_binary - POD only") {
     Prop b;
     b.set<int32_t>("x", 999);
     // bのフィールドのversionを直接書き換えて不一致を作る
-    const_cast<cutil::PropInfoList&>(b.infos())[0].version = 2;
+    const_cast<cutil::PropInfo&>(b.infos())[0].version = 2;
 
     bool fallback_called = false;
     cutil::prop_load_binary(b, bytes, [&](Prop&, const std::vector<uint8_t>&) {

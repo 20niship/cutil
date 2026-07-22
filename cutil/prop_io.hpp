@@ -116,6 +116,11 @@ inline json::Value pod_to_json(PropType type, const void* ptr) {
       float f[6]    = {r->x.min, r->x.max, r->y.min, r->y.max, r->z.min, r->z.max};
       return floats_to_json(f, 6);
     }
+    // PropType::Refは生ポインタの数値をそのまま記録する(デバッグ/同一プロセス内での
+    // ラウンドトリップ用途のみ。別プロセス/別実行でのloadではアドレスは無意味になる)。
+    case PropType::Ref: return json::Value::make_int(reinterpret_cast<intptr_t>(*reinterpret_cast<void* const*>(ptr)));
+    // PropType::RefListは複数の生ポインタを保持するため、この単一値向けの変換では
+    // 表現できない(prop_dump_json側でnullとして記録される)。
     default: return json::Value();
   }
 }
@@ -165,6 +170,11 @@ inline void json_to_pod(PropType type, const json::Value& v, void* ptr) {
       r->y.max   = f[3];
       r->z.min   = f[4];
       r->z.max   = f[5];
+      break;
+    }
+    case PropType::Ref: {
+      auto raw = static_cast<intptr_t>(v.as_int());
+      *reinterpret_cast<void**>(ptr) = reinterpret_cast<void*>(raw);
       break;
     }
     default: break;
@@ -257,6 +267,10 @@ inline bool prop_load_json(Prop& prop, const std::string& text) {
         prop.adopt_custom_slot(name.c_str(), custom_type_name.c_str(), std::move(slot));
         break;
       }
+      // PropType::RefListは生ポインタのリストを所有するため、set_raw_pod(POD専用)には
+      // 載せられない。JSON側には(pod_to_jsonの既定でnullとして)記録されているだけなので、
+      // 復元不能なフィールドとして読み飛ばす(プロセス内スナップショット用途の既知の制約)。
+      case PropType::RefList: break;
       default: {
         // POD型は一旦ゼロ初期化したバッファに変換してからset_raw_podで反映する
         std::vector<uint8_t> tmp(prop_type_size(type), 0);
@@ -286,7 +300,7 @@ constexpr uint32_t PROP_FILEFLAG_HAS_JSON_BLOCK    = 1u << 1;
 // 1ファイルで完結できるよう、全フィールドのJSONダンプ([JsonBlockHeader]+
 // [JsonBlock])を末尾に常に併載する。
 inline bool prop_dump_binary(const Prop& prop, std::vector<uint8_t>& out) {
-  const PropInfoList& fields = prop.infos();
+  const PropInfo& fields = prop.infos();
   const uint8_t* prop_data    = prop.raw_data();
 
   std::string json_text;
@@ -312,7 +326,7 @@ inline bool prop_dump_binary(const Prop& prop, std::vector<uint8_t>& out) {
   size_t data_cursor = 0;
   size_t blob_cursor  = 0;
   for(size_t i = 0; i < fields.size(); i++) {
-    const PropInfo& info = fields[i];
+    const PropInfo::Data& info = fields[i];
     if(!info.is_pointer) {
       data_cursor     = align_up(data_cursor, prop_type_align(info.type));
       data_offsets[i] = static_cast<uint32_t>(data_cursor);
@@ -372,7 +386,7 @@ inline bool prop_dump_binary(const Prop& prop, std::vector<uint8_t>& out) {
   std::memcpy(out.data(), &header, sizeof(header));
 
   for(size_t i = 0; i < fields.size(); i++) {
-    const PropInfo& info = fields[i];
+    const PropInfo::Data& info = fields[i];
 
     PropEntryHeader eh;
     std::strncpy(eh.name, info.name, sizeof(eh.name) - 1);
@@ -490,7 +504,7 @@ inline bool prop_load_binary(Prop& prop, const std::vector<uint8_t>& bytes, cons
 
     // Prop側に既に同名フィールドが存在し、バージョンが食い違う場合は
     // フォーマット変更とみなしフォールバックへ丸ごと処理を委譲する。
-    const PropInfo* existing = find_info(prop.infos(), eh.name);
+    const PropInfo::Data* existing = find_info(prop.infos(), eh.name);
     if(existing && existing->version != eh.prop_info_version) return do_fallback();
 
     size_t entry_data_offset = data_block_offset + eh.data_offset;

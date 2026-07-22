@@ -115,7 +115,7 @@ TEST_SUITE("Prop - Custom fields via set_custom/get_custom") {
       CustomSlot video;
     };
 
-    static const cutil::PropInfoList rule = {
+    static const cutil::PropInfo rule = {
         {"video", cutil::PropType::Custom, offsetof(Entity, video), sizeof(Entity::video), true},
     };
 

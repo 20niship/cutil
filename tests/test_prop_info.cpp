@@ -6,14 +6,14 @@ using cutil::find_info;
 using cutil::has_flag;
 using cutil::PropFlags;
 using cutil::PropInfo;
-using cutil::PropInfoList;
 using cutil::PropType;
 using cutil::PropWidget;
 using cutil::validate;
+using Data = cutil::PropInfo::Data;
 
 TEST_SUITE("PropInfo - Basic Operations") {
   TEST_CASE("Field sizes do not overflow") {
-    PropInfo info;
+    Data info;
     CHECK(sizeof(info.name) == 32);
     CHECK(sizeof(info.label) == 64);
     CHECK(sizeof(info.desc) == 256);
@@ -22,7 +22,7 @@ TEST_SUITE("PropInfo - Basic Operations") {
   }
 
   TEST_CASE("Construct with name/type/offset/size/is_pointer") {
-    PropInfo info("pos", PropType::Vec3, 0, 12, false);
+    Data info("pos", PropType::Vec3, 0, 12, false);
     CHECK(std::string(info.name) == "pos");
     CHECK(info.type == PropType::Vec3);
     CHECK(info.offset == 0);
@@ -31,19 +31,19 @@ TEST_SUITE("PropInfo - Basic Operations") {
   }
 
   TEST_CASE("set_name/set_label/set_desc truncate safely") {
-    PropInfo info;
+    Data info;
     std::string long_name(100, 'x');
     info.set_name(long_name.c_str());
     CHECK(std::strlen(info.name) == sizeof(info.name) - 1);
   }
 
   TEST_CASE("find_info by name (linear search)") {
-    PropInfoList list;
+    PropInfo list;
     list.emplace_back("a", PropType::Int, 0, 4, false);
     list.emplace_back("b", PropType::Float, 4, 4, false);
     list.emplace_back("c", PropType::Str, 8, sizeof(void*), true);
 
-    const PropInfo* found = find_info(list, "b");
+    const Data* found = find_info(list, "b");
     REQUIRE(found != nullptr);
     CHECK(found->type == PropType::Float);
 
@@ -51,7 +51,7 @@ TEST_SUITE("PropInfo - Basic Operations") {
   }
 
   TEST_CASE("default_value stores POD values") {
-    PropInfo info("x", PropType::Float, 0, sizeof(float), false);
+    Data info("x", PropType::Float, 0, sizeof(float), false);
     float v = 3.5f;
     std::memcpy(info.default_value, &v, sizeof(v));
     float readback;
@@ -67,7 +67,7 @@ TEST_SUITE("PropInfo - Basic Operations") {
   }
 
   TEST_CASE("validate min/max range") {
-    PropInfo info("t", PropType::Float, 0, sizeof(float), false);
+    Data info("t", PropType::Float, 0, sizeof(float), false);
     info.min_value = 0.0f;
     info.max_value = 1.0f;
     CHECK(validate(info, 0.5f));
@@ -76,7 +76,7 @@ TEST_SUITE("PropInfo - Basic Operations") {
   }
 
   TEST_CASE("validate with unset range (0,0) always passes") {
-    PropInfo info("t", PropType::Float, 0, sizeof(float), false);
+    Data info("t", PropType::Float, 0, sizeof(float), false);
     CHECK(validate(info, 12345.0f));
   }
 
