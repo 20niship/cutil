@@ -5,7 +5,9 @@
 #include <vector>
 
 #include <cutil/pool.hpp>
+#include <cutil/prop.hpp>
 #include <cutil/ref.hpp>
+#include <cutil/string.hpp>
 
 namespace cutil {
 
@@ -15,6 +17,27 @@ namespace cutil {
 class Mesh final : public enable_ref_from_this<Mesh> {
 public:
   int vertex_count = 0;
+
+  // Prop::dump()/load_to() 用のルール。vertex_countのみがPOD相当のフィールド。
+  // Mesh/ModelはBase(enable_ref_from_this)を持つためstandard-layoutではないが、
+  // 単一の非仮想継承なのでoffsetofの結果自体は主要コンパイラで安全に扱える。
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winvalid-offsetof"
+  static const PropInfo* get_propinfo() {
+    static const PropInfo rule = {
+        {"vertex_count", PropType::Int, offsetof(Mesh, vertex_count), sizeof(int), false},
+    };
+    return &rule;
+  }
+#pragma GCC diagnostic pop
+
+  // get_propinfo()のルールに従って自身をPropへ書き出す/Propから復元する薄いラッパー。
+  [[nodiscard]] Prop dump() const {
+    Prop p;
+    p.dump(this, get_propinfo());
+    return p;
+  }
+  bool load(const Prop& p) { return p.load_to(this, get_propinfo()); }
 
   template <size_t PoolSize = 64> static Ref<Mesh> Create(int vertex_count, ObjectPool<Mesh, PoolSize>* pool = nullptr) {
     if(!pool) {
@@ -45,11 +68,37 @@ private:
 
 class Model final : public enable_ref_from_this<Model> {
 public:
-  std::string name;
+  Str name;
   float position[3] = {0.0f, 0.0f, 0.0f};
   std::vector<Ref<Mesh>> meshes;
   WeakPtr<Model> parent; // WeakPtr で循環参照を防止
   std::vector<Ref<Model>> children;
+
+  // Prop::dump()/load_to() 用のルール。name/positionはPOD/Str相当、
+  // parent/meshes/childrenはPropType::Ref/RefList経由で「生ポインタ」として
+  // やり取りする(実体はObjectPool/Ref側に置いたまま、Prop側は参照のみ保持する)。
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winvalid-offsetof"
+  static const PropInfo* get_propinfo() {
+    static const PropInfo rule = {
+        {"name", PropType::Str, offsetof(Model, name), sizeof(Str), true},
+        {"position", PropType::Vec3, offsetof(Model, position), sizeof(Vec3f), false}, // float[3]とVec3fはバイト互換
+        PropInfo::Data::make_ref<Model>("parent", offsetof(Model, parent)),
+        PropInfo::Data::make_ref_list<Mesh>("meshes", offsetof(Model, meshes)),
+        PropInfo::Data::make_ref_list<Model>("children", offsetof(Model, children)),
+    };
+    return &rule;
+  }
+#pragma GCC diagnostic pop
+
+  // get_propinfo()のルールに従って自身をPropへ書き出す/Propから復元する薄いラッパー。
+  // parent/meshes/childrenも(生きたオブジェクトへの参照として)含めて復元される。
+  [[nodiscard]] Prop dump() const {
+    Prop p;
+    p.dump(this, get_propinfo());
+    return p;
+  }
+  bool load(const Prop& p) { return p.load_to(this, get_propinfo()); }
 
   void add_child(Ref<Model> child) {
     if(!child) return;

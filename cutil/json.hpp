@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 // cutil::json: nlohmann/json への薄いラッパー
 // STBスタイル: 通常include時は<nlohmann/json.hpp>をincludeせず宣言のみ公開する。
@@ -35,6 +36,7 @@ public:
   [[nodiscard]] bool contains(const std::string& key) const;
   [[nodiscard]] Value get(const std::string& key) const;
   void set(const std::string& key, const Value& v);
+  [[nodiscard]] std::vector<std::string> keys() const; // is_object()の場合のみ有効
 
   // 配列アクセス
   [[nodiscard]] size_t size() const;
@@ -111,6 +113,14 @@ Value Value::get(const std::string& key) const {
 }
 
 void Value::set(const std::string& key, const Value& v) { impl_->j[key] = v.impl_->j; }
+
+std::vector<std::string> Value::keys() const {
+  std::vector<std::string> result;
+  if(impl_->j.is_object()) {
+    for(auto it = impl_->j.begin(); it != impl_->j.end(); ++it) result.push_back(it.key());
+  }
+  return result;
+}
 
 size_t Value::size() const { return impl_->j.size(); }
 
