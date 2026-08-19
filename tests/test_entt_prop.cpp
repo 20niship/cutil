@@ -25,9 +25,10 @@ using namespace cutil;
 // --- EnttManager: 型消去コンポーネント配列 -----------------------------------
 
 struct EnttManager {
-  // trivially copyableなTはcopy_ctor/dtorを焼き込まず一括memcpyする(非trivial型のみdeep copy)。
+  // 非trivial型はvector<uint8_t>のmemmove再配置で自己参照が壊れるためcopy_ctor/dtorで手動再構築する。data_.size()はcapacity、count_が有効要素数。
   struct EnttDataImpl {
     std::vector<uint8_t> data_;
+    size_t count_                          = 0;
     uint32_t element_size_                = 0;
     void (*copy_ctor)(void*, const void*) = nullptr;
     void (*dtor)(void*)                    = nullptr;
@@ -40,7 +41,7 @@ struct EnttManager {
 
     ~EnttDataImpl() {
       if(!dtor) return;
-      for(size_t i = 0; i + element_size_ <= data_.size(); i += element_size_) dtor(&data_[i]);
+      for(size_t i = 0; i < count_; i++) dtor(&data_[i * element_size_]);
     }
   };
 
@@ -54,13 +55,27 @@ struct EnttManager {
         enttData.dtor      = [](void* obj) { reinterpret_cast<T*>(obj)->~T(); };
       }
     }
-    size_t old_size = enttData.data_.size();
-    enttData.data_.resize(old_size + sizeof(T));
+
     if(enttData.copy_ctor) {
-      enttData.copy_ctor(&enttData.data_[old_size], &component);
+      // 非trivial型: 容量が足りない場合はcopy_ctor/dtorで新バッファへ再構築してから追加する
+      size_t needed_bytes = (enttData.count_ + 1) * enttData.element_size_;
+      if(needed_bytes > enttData.data_.size()) {
+        size_t new_count = enttData.count_ == 0 ? 1 : enttData.count_ * 2;
+        std::vector<uint8_t> new_data(new_count * enttData.element_size_);
+        for(size_t i = 0; i < enttData.count_; i++) {
+          void* old_elem = &enttData.data_[i * enttData.element_size_];
+          enttData.copy_ctor(&new_data[i * enttData.element_size_], old_elem);
+          enttData.dtor(old_elem);
+        }
+        enttData.data_.swap(new_data);
+      }
+      enttData.copy_ctor(&enttData.data_[enttData.count_ * enttData.element_size_], &component);
     } else {
-      std::memcpy(&enttData.data_[old_size], &component, sizeof(T)); // trivially copyable: 一括memcpy
+      // trivially copyable: vector<uint8_t>のresizeによる再配置はビットコピーで安全なので一括memcpyで済ませる
+      enttData.data_.resize((enttData.count_ + 1) * enttData.element_size_);
+      std::memcpy(&enttData.data_[enttData.count_ * enttData.element_size_], &component, sizeof(T));
     }
+    enttData.count_++;
   }
 
   template <typename T> std::vector<T*> get() {
@@ -70,8 +85,9 @@ struct EnttManager {
 
     auto& enttData = it->second;
     std::vector<T*> components;
-    for(size_t i = 0; i + sizeof(T) <= enttData.data_.size(); i += sizeof(T)) {
-      components.push_back(reinterpret_cast<T*>(&enttData.data_[i]));
+    components.reserve(enttData.count_);
+    for(size_t i = 0; i < enttData.count_; i++) {
+      components.push_back(reinterpret_cast<T*>(&enttData.data_[i * sizeof(T)]));
     }
     return components;
   }
