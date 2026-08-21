@@ -9,7 +9,18 @@
 
 #include <cutil/prop.hpp>
 
-// cutil::prop_dump_binary/prop_load_binary: PropKlass(Trivial/Indirect/Dynamic)に基づく新フォーマット(Issue #21)。型ごとに1回だけ[SchemaSection]に記録し[EntryTable]は名前+schema参照+offset/sizeのみの軽量レコードにする(旧設計はフィールドごとに496バイト級メタデータを値ごとに毎回書いていた)。レイアウトは[FileHeader]+[SchemaSection]+[EntryTable]+[DataBlock]+[BlobBlock]で、JsonBlock常時併載は廃止しDynamic型のみBlobBlock内に個別jsonを持つ。
+// cutil::prop_dump_binary/prop_load_binary: PropKlass(Trivial/Indirect/Dynamic)に基づく新バイナリフォーマット(Issue #21)。
+//
+// 型ごとに1回だけ[SchemaSection]へスキーマを記録.
+// [EntryTable]は「名前 + schema参照index + offset/size」のみの軽量レコードにすることでこれを解消する。
+// JsonBlockの常時併載は廃止しDynamic型のみBlobBlock内に個別のjsonを持つ。
+//
+// ファイルレイアウト:
+//   [FileHeader]     magic/format_version/endianness_tag/schema_count/entry_count
+//   [SchemaSection]  型ごとに1回: type_id/version/size/フィールド一覧(name+type_id+offset+size)
+//   [EntryTable]     値ごと: name + schema_index + DataBlock内のoffset/size
+//   [DataBlock]      Trivialは実データそのまま、Indirect/Dynamicは{blob_offset,blob_size}の8バイト固定ヘッダのみ
+//   [BlobBlock]      Indirectの可変長部(配列要素・文字列本体・再帰的な子構造)、Dynamicはto_json()の結果
 
 namespace cutil {
 
