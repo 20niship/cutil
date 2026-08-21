@@ -173,187 +173,27 @@ template <typename T> inline const PropInfo* prop_info_of() {
 // ---- 軽量JSON文字列ヘルパー(PropInfo::to_json/from_jsonがstd::string契約のためDOM構造を経由しない) ----
 namespace detail {
 
-inline std::string json_trim(const std::string& s) {
-  size_t b = s.find_first_not_of(" \t\n\r");
-  if(b == std::string::npos) return "";
-  size_t e = s.find_last_not_of(" \t\n\r");
-  return s.substr(b, e - b + 1);
-}
-
-inline std::string json_number(double v) {
-  char buf[64];
-  std::snprintf(buf, sizeof(buf), "%.17g", v);
-  return buf;
-}
-
-inline std::string json_quote(const std::string& s) {
-  std::string out = "\"";
-  for(unsigned char c : s) {
-    switch(c) {
-      case '"': out += "\\\""; break;
-      case '\\': out += "\\\\"; break;
-      case '\n': out += "\\n"; break;
-      case '\r': out += "\\r"; break;
-      case '\t': out += "\\t"; break;
-      default:
-        if(c < 0x20) {
-          char buf[8];
-          std::snprintf(buf, sizeof(buf), "\\u%04x", c);
-          out += buf;
-        } else {
-          out += static_cast<char>(c);
-        }
-    }
-  }
-  out += "\"";
-  return out;
-}
+std::string json_trim(const std::string& s);
+std::string json_number(double v);
+std::string json_quote(const std::string& s);
 
 // "..." 形式(前後の空白は除去済み想定)の文字列リテラルをデコードする。
-inline std::string json_unquote(const std::string& s) {
-  std::string out;
-  if(s.size() < 2 || s.front() != '"' || s.back() != '"') return out;
-  for(size_t i = 1; i + 1 < s.size(); i++) {
-    char c = s[i];
-    if(c == '\\' && i + 2 < s.size()) {
-      i++;
-      switch(s[i]) {
-        case '"': out += '"'; break;
-        case '\\': out += '\\'; break;
-        case '/': out += '/'; break;
-        case 'n': out += '\n'; break;
-        case 'r': out += '\r'; break;
-        case 't': out += '\t'; break;
-        case 'b': out += '\b'; break;
-        case 'f': out += '\f'; break;
-        case 'u':
-          if(i + 4 < s.size()) {
-            int code = std::stoi(s.substr(i + 1, 4), nullptr, 16); // BMP内ASCII相当のみを想定した簡易デコード
-            out += static_cast<char>(code);
-            i += 4;
-          }
-          break;
-        default: out += s[i];
-      }
-    } else {
-      out += c;
-    }
-  }
-  return out;
-}
+std::string json_unquote(const std::string& s);
 
 // "[...]"または"{...}"のトップレベル要素(ネスト/文字列内のカンマは無視)をカンマで分割する。
-inline std::vector<std::string> json_split_top_level(const std::string& s) {
-  std::vector<std::string> result;
-  std::string trimmed = json_trim(s);
-  if(trimmed.size() < 2) return result;
-  std::string body = trimmed.substr(1, trimmed.size() - 2);
-  size_t n         = body.size();
-  size_t start     = 0;
-  int depth        = 0;
-  bool in_string   = false;
-  for(size_t i = 0; i < n; i++) {
-    char c = body[i];
-    if(in_string) {
-      if(c == '\\') {
-        i++;
-        continue;
-      }
-      if(c == '"') in_string = false;
-    } else {
-      if(c == '"')
-        in_string = true;
-      else if(c == '[' || c == '{')
-        depth++;
-      else if(c == ']' || c == '}')
-        depth--;
-      else if(c == ',' && depth == 0) {
-        result.push_back(json_trim(body.substr(start, i - start)));
-        start = i + 1;
-      }
-    }
-  }
-  std::string last = json_trim(body.substr(start));
-  if(!last.empty()) result.push_back(last);
-  return result;
-}
+std::vector<std::string> json_split_top_level(const std::string& s);
 
 // "key":value 形式の1要素からkeyとvalueを取り出す(json_split_top_levelの各要素に対して使う)。
-inline bool json_split_kv(const std::string& s, std::string& key, std::string& value) {
-  bool in_string = false;
-  for(size_t i = 0; i < s.size(); i++) {
-    char c = s[i];
-    if(in_string) {
-      if(c == '\\') {
-        i++;
-        continue;
-      }
-      if(c == '"') in_string = false;
-    } else {
-      if(c == '"')
-        in_string = true;
-      else if(c == ':') {
-        key   = json_unquote(json_trim(s.substr(0, i)));
-        value = json_trim(s.substr(i + 1));
-        return true;
-      }
-    }
-  }
-  return false;
-}
+bool json_split_kv(const std::string& s, std::string& key, std::string& value);
 
-inline std::string json_array_of_floats(const float* data, size_t n) {
-  std::string out = "[";
-  for(size_t i = 0; i < n; i++) {
-    if(i) out += ",";
-    out += json_number(static_cast<double>(data[i]));
-  }
-  out += "]";
-  return out;
-}
-inline void json_floats_from_array(const std::string& text, float* out, size_t n) {
-  auto parts = json_split_top_level(text);
-  for(size_t i = 0; i < n && i < parts.size(); i++) out[i] = static_cast<float>(std::stod(parts[i]));
-}
+std::string json_array_of_floats(const float* data, size_t n);
 
 // element_type/seq_*アクセサだけを頼りに任意コンテナ型をJSON化する共通実装(uiVector<T>/std::vector<T>が共有する)。
-inline std::string generic_container_to_json(const PropInfo* type, const void* obj) {
-  size_t n        = type->seq_size(obj);
-  std::string out = "[";
-  for(size_t i = 0; i < n; i++) {
-    if(i) out += ",";
-    if(type->seq_data) {
-      const auto* base = reinterpret_cast<const uint8_t*>(type->seq_data(obj));
-      out += type->element_type->to_json(base + i * type->element_type->size);
-    } else {
-      out += type->element_type->to_json(type->seq_at(obj, i));
-    }
-  }
-  out += "]";
-  return out;
-}
+std::string generic_container_to_json(const PropInfo* type, const void* obj);
 
-inline bool generic_container_from_json(const PropInfo* type, void* obj, const std::string& text) {
-  auto parts = json_split_top_level(text);
+void json_floats_from_array(const std::string& text, float* out, size_t n);
 
-  if(type->seq_assign_raw) {
-    std::vector<uint8_t> buf(parts.size() * type->element_type->size);
-    for(size_t i = 0; i < parts.size(); i++) {
-      if(!type->element_type->from_json(buf.data() + i * type->element_type->size, parts[i])) return false;
-    }
-    if(type->default_ctor) type->default_ctor(obj);
-    type->seq_assign_raw(obj, buf.data(), parts.size());
-  } else {
-    if(type->default_ctor) type->default_ctor(obj);
-    for(const auto& part : parts) {
-      std::vector<uint8_t> storage(type->element_type->size);
-      if(!type->element_type->from_json(storage.data(), part)) return false; // from_json自体がplacement-newで構築する規約
-      type->seq_push_back_copy(obj, storage.data());
-      if(type->element_type->dtor) type->element_type->dtor(storage.data());
-    }
-  }
-  return true;
-}
+bool generic_container_from_json(const PropInfo* type, void* obj, const std::string& text);
 
 // Vec3f/Vec4fのような固定長float配列(data[N])を持つTrivial型の共通実装。
 template <typename VecT, size_t N> const PropInfo* make_vec_propinfo(const char* id) {
