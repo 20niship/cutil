@@ -55,24 +55,13 @@ public:
 
   template <typename T> void set(const char* name, const T& value, const char* label = nullptr, const char* desc = nullptr) {
     const PropInfo* type = prop_info_of<T>();
-    PropInfo::Field* f    = find_field(name);
-    bool is_new           = false;
-    if(!f) {
-      f = &add_field(name, type);
-      if(label) f->set_label(label);
-      if(desc) f->set_desc(desc);
-      is_new = true;
-    } else if(f->type != type) {
-      throw std::logic_error(std::string("Prop::set: field '") + name + "' already exists with a different type");
+    bool is_new;
+    PropInfo::Field& f = find_or_add_field(name, type, is_new);
+    if(is_new) {
+      if(label) f.set_label(label);
+      if(desc) f.set_desc(desc);
     }
-
-    uint8_t* dst = data_.data() + f->offset;
-    if(type->klass == PropKlass::Trivial) {
-      std::memcpy(dst, &value, sizeof(T));
-    } else {
-      if(!is_new && type->dtor) type->dtor(dst); // 既存フィールドは一旦破棄してから再構築する(assign用の別関数は持たない)
-      type->copy_ctor(dst, &value);
-    }
+    assign_value(f, type, &value, is_new);
   }
 
   template <typename T> T& get(const char* name) {
@@ -198,27 +187,16 @@ public:
 
   // prop_io.hpp向け実行時PropInfoベースの低レベルAPI(型がバイナリ/JSONのtype_idからしか分からない場面用)。
   void set_raw_pod_by_info(const char* name, const PropInfo* type, const void* bytes) {
-    PropInfo::Field* f = find_field(name);
-    if(!f) {
-      f = &add_field(name, type);
-    } else if(f->type != type) {
-      throw std::logic_error(std::string("Prop::set_raw_pod_by_info: field '") + name + "' already exists with a different type");
-    }
-    std::memcpy(data_.data() + f->offset, bytes, type->size);
+    bool is_new;
+    PropInfo::Field& f = find_or_add_field(name, type, is_new);
+    std::memcpy(data_.data() + f.offset, bytes, type->size);
   }
 
+  // constructed_srcは既に構築済みの一時オブジェクト。コピーして取り込んだ後、呼び出し側の代わりにここで破棄する(所有権移動)。
   void adopt_raw_by_info(const char* name, const PropInfo* type, void* constructed_src) {
-    PropInfo::Field* f = find_field(name);
-    bool is_new         = false;
-    if(!f) {
-      f      = &add_field(name, type);
-      is_new = true;
-    } else if(f->type != type) {
-      throw std::logic_error(std::string("Prop::adopt_raw_by_info: field '") + name + "' already exists with a different type");
-    }
-    uint8_t* dst = data_.data() + f->offset;
-    if(!is_new && type->dtor) type->dtor(dst);
-    type->copy_ctor(dst, constructed_src);
+    bool is_new;
+    PropInfo::Field& f = find_or_add_field(name, type, is_new);
+    assign_value(f, type, constructed_src, is_new);
     if(type->dtor) type->dtor(constructed_src);
   }
 
@@ -246,24 +224,36 @@ private:
     return fields_.back();
   }
 
-  // dump()用の実行時PropInfoに基づく汎用set(set<T>()と異なりコンパイル時型情報を使わない)。
-  void set_raw(const char* name, const PropInfo* type, const void* src_ptr) {
+  // 名前でフィールドを探し無ければ追加する(set<T>/set_raw/set_raw_pod_by_info/adopt_raw_by_infoが共有する前段ロジック)。
+  PropInfo::Field& find_or_add_field(const char* name, const PropInfo* type, bool& is_new) {
     PropInfo::Field* f = find_field(name);
-    bool is_new        = false;
     if(!f) {
       f      = &add_field(name, type);
       is_new = true;
     } else if(f->type != type) {
-      throw std::logic_error(std::string("Prop::dump: field '") + name + "' already exists with a different type");
+      throw std::logic_error(std::string("Prop: field '") + name + "' already exists with a different type");
+    } else {
+      is_new = false;
     }
+    return *f;
+  }
 
-    uint8_t* dst = data_.data() + f->offset;
+  // fのバッファへsrc_ptrの値を書き込む。Trivialはmemcpy、非Trivialは既存なら破棄してから再構築する。
+  void assign_value(PropInfo::Field& f, const PropInfo* type, const void* src_ptr, bool is_new) {
+    uint8_t* dst = data_.data() + f.offset;
     if(type->klass == PropKlass::Trivial) {
       std::memcpy(dst, src_ptr, type->size);
     } else {
-      if(!is_new && type->dtor) type->dtor(dst);
+      if(!is_new && type->dtor) type->dtor(dst); // 既存フィールドは一旦破棄してから再構築する(assign用の別関数は持たない)
       type->copy_ctor(dst, src_ptr);
     }
+  }
+
+  // dump()用の実行時PropInfoに基づく汎用set(set<T>()と異なりコンパイル時型情報を使わない)。
+  void set_raw(const char* name, const PropInfo* type, const void* src_ptr) {
+    bool is_new;
+    PropInfo::Field& f = find_or_add_field(name, type, is_new);
+    assign_value(f, type, src_ptr, is_new);
   }
 
   void destroy_all_fields() {

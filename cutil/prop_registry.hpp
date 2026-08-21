@@ -182,6 +182,66 @@ inline void json_array_to_floats(const json::Value& arr, float* out, size_t n) {
   for(size_t i = 0; i < n; i++) out[i] = static_cast<float>(arr.get(i).as_double());
 }
 
+// element_type/seq_*アクセサだけを頼りに任意コンテナ型をJSON化する共通実装(uiVector<T>/std::vector<T>が共有する)。
+inline std::string generic_container_to_json(const PropInfo* type, const void* obj) {
+  size_t n         = type->seq_size(obj);
+  json::Value arr = json::Value::make_array();
+  bool ok;
+  if(type->seq_data) {
+    const auto* base = reinterpret_cast<const uint8_t*>(type->seq_data(obj));
+    for(size_t i = 0; i < n; i++) arr.push_back(json::Value::parse(type->element_type->to_json(base + i * type->element_type->size), &ok));
+  } else {
+    for(size_t i = 0; i < n; i++) arr.push_back(json::Value::parse(type->element_type->to_json(type->seq_at(obj, i)), &ok));
+  }
+  return arr.dump();
+}
+
+inline bool generic_container_from_json(const PropInfo* type, void* obj, const std::string& text) {
+  bool ok           = false;
+  json::Value value = json::Value::parse(text, &ok);
+  if(!ok) return false;
+
+  if(type->seq_assign_raw) {
+    std::vector<uint8_t> buf(value.size() * type->element_type->size);
+    for(size_t i = 0; i < value.size(); i++) {
+      if(!type->element_type->from_json(buf.data() + i * type->element_type->size, value.get(i).dump())) return false;
+    }
+    if(type->default_ctor) type->default_ctor(obj);
+    type->seq_assign_raw(obj, buf.data(), value.size());
+  } else {
+    if(type->default_ctor) type->default_ctor(obj);
+    for(size_t i = 0; i < value.size(); i++) {
+      std::vector<uint8_t> storage(type->element_type->size);
+      if(type->element_type->default_ctor) type->element_type->default_ctor(storage.data());
+      if(!type->element_type->from_json(storage.data(), value.get(i).dump())) return false;
+      type->seq_push_back_copy(obj, storage.data());
+      if(type->element_type->dtor) type->element_type->dtor(storage.data());
+    }
+  }
+  return true;
+}
+
+// Vec3f/Vec4fのような固定長float配列(data[N])を持つTrivial型の共通実装。
+template <typename VecT, size_t N> const PropInfo* make_vec_propinfo(const char* id) {
+  static const PropInfo info = [id] {
+    PropInfo p;
+    p.set_id(id);
+    p.klass = PropKlass::Trivial;
+    p.size  = sizeof(VecT);
+    p.align = alignof(VecT);
+    p.to_json = [](const void* obj) -> std::string { return floats_to_json_array(reinterpret_cast<const VecT*>(obj)->data, N).dump(); };
+    p.from_json = [](void* obj, const std::string& text) -> bool {
+      bool ok           = false;
+      json::Value value = json::Value::parse(text, &ok);
+      if(!ok) return false;
+      json_array_to_floats(value, reinterpret_cast<VecT*>(obj)->data, N);
+      return true;
+    };
+    return p;
+  }();
+  return &info;
+}
+
 } // namespace detail
 
 // leaf Trivialスカラー型(bool/int32_t/float)。to_json/from_jsonは単一のjson値。
@@ -218,55 +278,12 @@ CUTIL_PROP_TRIVIAL_SCALAR(float, json::Value::make_double(static_cast<double>(v)
 CUTIL_PROP_TRIVIAL_SCALAR(uint8_t, json::Value::make_int(v), static_cast<uint8_t>(value.as_int()))
 #undef CUTIL_PROP_TRIVIAL_SCALAR
 
-// leaf Trivial複合型(floatの配列表現)。マクロ化するとカンマ/波括弧を含む式が引数分割で壊れるため個別に書く。
+// Vec3f/Vec4fはdata[N]という同一レイアウトを持つのでdetail::make_vec_propinfoに委譲する。
 template <> struct PropInfoOf<Vec3f> {
-  static const PropInfo* get() {
-    static const PropInfo info = [] {
-      PropInfo p;
-      p.set_id("Vec3f");
-      p.klass = PropKlass::Trivial;
-      p.size  = sizeof(Vec3f);
-      p.align = alignof(Vec3f);
-      p.to_json = [](const void* obj) -> std::string {
-        const auto& v = *reinterpret_cast<const Vec3f*>(obj);
-        return detail::floats_to_json_array(v.data, 3).dump();
-      };
-      p.from_json = [](void* obj, const std::string& text) -> bool {
-        bool ok           = false;
-        json::Value value = json::Value::parse(text, &ok);
-        if(!ok) return false;
-        detail::json_array_to_floats(value, reinterpret_cast<Vec3f*>(obj)->data, 3);
-        return true;
-      };
-      return p;
-    }();
-    return &info;
-  }
+  static const PropInfo* get() { return detail::make_vec_propinfo<Vec3f, 3>("Vec3f"); }
 };
-
 template <> struct PropInfoOf<Vec4f> {
-  static const PropInfo* get() {
-    static const PropInfo info = [] {
-      PropInfo p;
-      p.set_id("Vec4f");
-      p.klass = PropKlass::Trivial;
-      p.size  = sizeof(Vec4f);
-      p.align = alignof(Vec4f);
-      p.to_json = [](const void* obj) -> std::string {
-        const auto& v = *reinterpret_cast<const Vec4f*>(obj);
-        return detail::floats_to_json_array(v.data, 4).dump();
-      };
-      p.from_json = [](void* obj, const std::string& text) -> bool {
-        bool ok           = false;
-        json::Value value = json::Value::parse(text, &ok);
-        if(!ok) return false;
-        detail::json_array_to_floats(value, reinterpret_cast<Vec4f*>(obj)->data, 4);
-        return true;
-      };
-      return p;
-    }();
-    return &info;
-  }
+  static const PropInfo* get() { return detail::make_vec_propinfo<Vec4f, 4>("Vec4f"); }
 };
 
 template <> struct PropInfoOf<Quat<float>> {
@@ -397,64 +414,59 @@ template <> struct PropInfoOf<Rect3D> {
   }
 };
 
-// Str/PathはSSO実装差異を安全に吸収するため、uiVector<char>汎用テンプレートに便乗させず専用leaf Indirectとして個別実装する。
-template <> struct PropInfoOf<Str> {
-  static const PropInfo* get() {
-    static const PropInfo info = [] {
-      PropInfo p;
-      p.set_id("Str");
-      p.klass       = PropKlass::Indirect;
-      p.size        = sizeof(Str);
-      p.align       = alignof(Str);
-      p.copy_ctor   = [](void* dst, const void* src) { new(dst) Str(*reinterpret_cast<const Str*>(src)); };
-      p.dtor        = [](void* obj) { reinterpret_cast<Str*>(obj)->~Str(); };
-      p.default_ctor = [](void* obj) { new(obj) Str(); };
-      // 文字列本体をuint8_tのコンテナとして表現する(write/read_value_binaryの一括memcpy経路に乗せるため)。
-      p.element_type = prop_info_of<uint8_t>();
-      p.seq_size     = [](const void* obj) -> size_t { return reinterpret_cast<const Str*>(obj)->size(); };
-      p.seq_data     = [](const void* obj) -> const void* { return reinterpret_cast<const void*>(reinterpret_cast<const Str*>(obj)->c_str()); };
-      p.seq_assign_raw = [](void* obj, const void* src, size_t n) { *reinterpret_cast<Str*>(obj) = Str(reinterpret_cast<const char*>(src), n); };
-      p.to_json     = [](const void* obj) -> std::string { return json::Value::make_string(reinterpret_cast<const Str*>(obj)->c_str()).dump(); };
-      p.from_json   = [](void* obj, const std::string& text) -> bool {
-        bool ok           = false;
-        json::Value value = json::Value::parse(text, &ok);
-        if(!ok) return false;
-        new(obj) Str(value.as_string().c_str());
-        return true;
-      };
-      return p;
-    }();
-    return &info;
-  }
+// Str/Pathは「文字列本体を持つ型」という点で同型なのでアクセス方法だけTraitsに切り出し共通実装に委譲する(SSO差異はTraits内に閉じ込める)。
+namespace detail {
+
+struct StrTraits {
+  using T = Str;
+  static const char* c_str(const T& v) { return v.c_str(); }
+  static size_t size(const T& v) { return v.size(); }
+  static void assign(T& v, const char* s, size_t n) { v = Str(s, n); }
+};
+struct PathTraits {
+  using T = Path;
+  static const char* c_str(const T& v) { return v.str().c_str(); }
+  static size_t size(const T& v) { return v.str().size(); }
+  static void assign(T& v, const char* s, size_t n) { v = Path(Str(s, n)); }
 };
 
+template <typename Traits> const PropInfo* make_string_like_propinfo(const char* id) {
+  using T = typename Traits::T;
+  static const PropInfo info = [id] {
+    PropInfo p;
+    p.set_id(id);
+    p.klass         = PropKlass::Indirect;
+    p.size          = sizeof(T);
+    p.align         = alignof(T);
+    p.copy_ctor     = [](void* dst, const void* src) { new(dst) T(*reinterpret_cast<const T*>(src)); };
+    p.dtor          = [](void* obj) { reinterpret_cast<T*>(obj)->~T(); };
+    p.default_ctor  = [](void* obj) { new(obj) T(); };
+    p.element_type  = prop_info_of<uint8_t>(); // 文字列本体をuint8_tのコンテナとして表現し一括memcpy経路に乗せる
+    p.seq_size      = [](const void* obj) -> size_t { return Traits::size(*reinterpret_cast<const T*>(obj)); };
+    p.seq_data      = [](const void* obj) -> const void* { return reinterpret_cast<const void*>(Traits::c_str(*reinterpret_cast<const T*>(obj))); };
+    p.seq_assign_raw = [](void* obj, const void* src, size_t n) { Traits::assign(*reinterpret_cast<T*>(obj), reinterpret_cast<const char*>(src), n); };
+    p.to_json       = [](const void* obj) -> std::string { return json::Value::make_string(Traits::c_str(*reinterpret_cast<const T*>(obj))).dump(); };
+    p.from_json     = [](void* obj, const std::string& text) -> bool {
+      bool ok           = false;
+      json::Value value = json::Value::parse(text, &ok);
+      if(!ok) return false;
+      std::string s = value.as_string();
+      new(obj) T();
+      Traits::assign(*reinterpret_cast<T*>(obj), s.data(), s.size());
+      return true;
+    };
+    return p;
+  }();
+  return &info;
+}
+
+} // namespace detail
+
+template <> struct PropInfoOf<Str> {
+  static const PropInfo* get() { return detail::make_string_like_propinfo<detail::StrTraits>("Str"); }
+};
 template <> struct PropInfoOf<Path> {
-  static const PropInfo* get() {
-    static const PropInfo info = [] {
-      PropInfo p;
-      p.set_id("Path");
-      p.klass       = PropKlass::Indirect;
-      p.size        = sizeof(Path);
-      p.align       = alignof(Path);
-      p.copy_ctor   = [](void* dst, const void* src) { new(dst) Path(*reinterpret_cast<const Path*>(src)); };
-      p.dtor        = [](void* obj) { reinterpret_cast<Path*>(obj)->~Path(); };
-      p.default_ctor = [](void* obj) { new(obj) Path(); };
-      p.element_type = prop_info_of<uint8_t>();
-      p.seq_size     = [](const void* obj) -> size_t { return reinterpret_cast<const Path*>(obj)->str().size(); };
-      p.seq_data     = [](const void* obj) -> const void* { return reinterpret_cast<const void*>(reinterpret_cast<const Path*>(obj)->str().c_str()); };
-      p.seq_assign_raw = [](void* obj, const void* src, size_t n) { *reinterpret_cast<Path*>(obj) = Path(Str(reinterpret_cast<const char*>(src), n)); };
-      p.to_json     = [](const void* obj) -> std::string { return json::Value::make_string(reinterpret_cast<const Path*>(obj)->str().c_str()).dump(); };
-      p.from_json   = [](void* obj, const std::string& text) -> bool {
-        bool ok           = false;
-        json::Value value = json::Value::parse(text, &ok);
-        if(!ok) return false;
-        new(obj) Path(Str(value.as_string().c_str()));
-        return true;
-      };
-      return p;
-    }();
-    return &info;
-  }
+  static const PropInfo* get() { return detail::make_string_like_propinfo<detail::PathTraits>("Path"); }
 };
 
 template <> struct PropInfoOf<std::vector<uint8_t>> {
@@ -501,49 +513,28 @@ template <> struct PropInfoOf<std::vector<uint8_t>> {
 template <typename T> struct PropInfoOf<uiVector<T>> {
   static const PropInfo* get() {
     static_assert(std::is_trivially_copyable_v<T>, "uiVector<T>: T must be trivially copyable (use std::vector<T> for non-trivial T)");
-    static const PropInfo info = [] {
-      PropInfo p;
-      p.set_id("uiVector<T>");
-      p.klass         = PropKlass::Indirect;
-      p.size          = sizeof(uiVector<T>);
-      p.align         = alignof(uiVector<T>);
-      p.copy_ctor     = [](void* dst, const void* src) { new(dst) uiVector<T>(*reinterpret_cast<const uiVector<T>*>(src)); };
-      p.dtor          = [](void* obj) { reinterpret_cast<uiVector<T>*>(obj)->~uiVector<T>(); };
-      p.default_ctor  = [](void* obj) { new(obj) uiVector<T>(); };
-      p.element_type  = prop_info_of<T>();
-      p.seq_size      = [](const void* obj) -> size_t { return static_cast<size_t>(reinterpret_cast<const uiVector<T>*>(obj)->size()); };
-      p.seq_data      = [](const void* obj) -> const void* { return reinterpret_cast<const void*>(reinterpret_cast<const uiVector<T>*>(obj)->begin()); };
-      p.seq_assign_raw = [](void* obj, const void* src, size_t n) {
+    static PropInfo info;
+    static bool initialized = false;
+    if(!initialized) {
+      info.set_id("uiVector<T>");
+      info.klass         = PropKlass::Indirect;
+      info.size          = sizeof(uiVector<T>);
+      info.align         = alignof(uiVector<T>);
+      info.copy_ctor     = [](void* dst, const void* src) { new(dst) uiVector<T>(*reinterpret_cast<const uiVector<T>*>(src)); };
+      info.dtor          = [](void* obj) { reinterpret_cast<uiVector<T>*>(obj)->~uiVector<T>(); };
+      info.default_ctor  = [](void* obj) { new(obj) uiVector<T>(); };
+      info.element_type  = prop_info_of<T>();
+      info.seq_size      = [](const void* obj) -> size_t { return static_cast<size_t>(reinterpret_cast<const uiVector<T>*>(obj)->size()); };
+      info.seq_data      = [](const void* obj) -> const void* { return reinterpret_cast<const void*>(reinterpret_cast<const uiVector<T>*>(obj)->begin()); };
+      info.seq_assign_raw = [](void* obj, const void* src, size_t n) {
         auto* v = reinterpret_cast<uiVector<T>*>(obj);
         v->resize(static_cast<int>(n));
         if(n) std::memcpy(v->data(), src, n * sizeof(T));
       };
-      p.to_json = [](const void* obj) -> std::string {
-        const auto* v   = reinterpret_cast<const uiVector<T>*>(obj);
-        json::Value arr = json::Value::make_array();
-        for(int i = 0; i < v->size(); i++) {
-          bool ok;
-          arr.push_back(json::Value::parse(prop_info_of<T>()->to_json(v->begin() + i), &ok));
-        }
-        return arr.dump();
-      };
-      p.from_json = [](void* obj, const std::string& text) -> bool {
-        bool ok           = false;
-        json::Value value = json::Value::parse(text, &ok);
-        if(!ok) return false;
-        auto* v = new(obj) uiVector<T>();
-        v->resize(static_cast<int>(value.size()));
-        for(size_t i = 0; i < value.size(); i++) {
-          bool elem_ok;
-          T elem;
-          json::Value ev = value.get(i);
-          if(!prop_info_of<T>()->from_json(&elem, ev.dump())) return (void)(elem_ok = false), false;
-          (*v)[static_cast<int>(i)] = elem;
-        }
-        return true;
-      };
-      return p;
-    }();
+      info.to_json   = [](const void* obj) -> std::string { return detail::generic_container_to_json(&info, obj); };
+      info.from_json = [](void* obj, const std::string& text) -> bool { return detail::generic_container_from_json(&info, obj, text); };
+      initialized     = true;
+    }
     return &info;
   }
 };
@@ -551,55 +542,33 @@ template <typename T> struct PropInfoOf<uiVector<T>> {
 // std::vector<T>は要素がIndirect(非trivial)でも安全に扱える汎用コンテナ(B-in-Bに使う)。要素Trivialなら一括memcpy、Indirectなら要素ごと再帰する。
 template <typename T> struct PropInfoOf<std::vector<T>> {
   static const PropInfo* get() {
-    static const PropInfo info = [] {
-      PropInfo p;
-      p.set_id("std::vector<T>");
-      p.klass        = PropKlass::Indirect;
-      p.size         = sizeof(std::vector<T>);
-      p.align        = alignof(std::vector<T>);
-      p.copy_ctor    = [](void* dst, const void* src) { new(dst) std::vector<T>(*reinterpret_cast<const std::vector<T>*>(src)); };
-      p.dtor         = [](void* obj) { reinterpret_cast<std::vector<T>*>(obj)->~vector(); };
-      p.default_ctor = [](void* obj) { new(obj) std::vector<T>(); };
-      p.element_type = prop_info_of<T>();
-      p.seq_size     = [](const void* obj) -> size_t { return reinterpret_cast<const std::vector<T>*>(obj)->size(); };
+    static PropInfo info;
+    static bool initialized = false;
+    if(!initialized) {
+      info.set_id("std::vector<T>");
+      info.klass        = PropKlass::Indirect;
+      info.size         = sizeof(std::vector<T>);
+      info.align        = alignof(std::vector<T>);
+      info.copy_ctor    = [](void* dst, const void* src) { new(dst) std::vector<T>(*reinterpret_cast<const std::vector<T>*>(src)); };
+      info.dtor         = [](void* obj) { reinterpret_cast<std::vector<T>*>(obj)->~vector(); };
+      info.default_ctor = [](void* obj) { new(obj) std::vector<T>(); };
+      info.element_type = prop_info_of<T>();
+      info.seq_size     = [](const void* obj) -> size_t { return reinterpret_cast<const std::vector<T>*>(obj)->size(); };
       if constexpr(std::is_trivially_copyable_v<T>) {
-        p.seq_data       = [](const void* obj) -> const void* { return reinterpret_cast<const void*>(reinterpret_cast<const std::vector<T>*>(obj)->data()); };
-        p.seq_assign_raw = [](void* obj, const void* src, size_t n) {
+        info.seq_data       = [](const void* obj) -> const void* { return reinterpret_cast<const void*>(reinterpret_cast<const std::vector<T>*>(obj)->data()); };
+        info.seq_assign_raw = [](void* obj, const void* src, size_t n) {
           auto* v = reinterpret_cast<std::vector<T>*>(obj);
           v->resize(n);
           if(n) std::memcpy(v->data(), src, n * sizeof(T));
         };
       } else {
-        p.seq_at             = [](const void* obj, size_t i) -> const void* { return reinterpret_cast<const void*>(&(*reinterpret_cast<const std::vector<T>*>(obj))[i]); };
-        p.seq_push_back_copy = [](void* obj, const void* elem) { reinterpret_cast<std::vector<T>*>(obj)->push_back(*reinterpret_cast<const T*>(elem)); };
+        info.seq_at             = [](const void* obj, size_t i) -> const void* { return reinterpret_cast<const void*>(&(*reinterpret_cast<const std::vector<T>*>(obj))[i]); };
+        info.seq_push_back_copy = [](void* obj, const void* elem) { reinterpret_cast<std::vector<T>*>(obj)->push_back(*reinterpret_cast<const T*>(elem)); };
       }
-      p.to_json = [](const void* obj) -> std::string {
-        const auto* v   = reinterpret_cast<const std::vector<T>*>(obj);
-        json::Value arr = json::Value::make_array();
-        for(const auto& elem : *v) {
-          bool ok;
-          arr.push_back(json::Value::parse(prop_info_of<T>()->to_json(&elem), &ok));
-        }
-        return arr.dump();
-      };
-      p.from_json = [](void* obj, const std::string& text) -> bool {
-        bool ok           = false;
-        json::Value value = json::Value::parse(text, &ok);
-        if(!ok) return false;
-        auto* v = new(obj) std::vector<T>();
-        v->reserve(value.size());
-        for(size_t i = 0; i < value.size(); i++) {
-          json::Value ev = value.get(i);
-          std::vector<uint8_t> storage(prop_info_of<T>()->size);
-          if(prop_info_of<T>()->default_ctor) prop_info_of<T>()->default_ctor(storage.data());
-          if(!prop_info_of<T>()->from_json(storage.data(), ev.dump())) return false;
-          v->push_back(*reinterpret_cast<T*>(storage.data()));
-          if(prop_info_of<T>()->dtor) prop_info_of<T>()->dtor(storage.data());
-        }
-        return true;
-      };
-      return p;
-    }();
+      info.to_json   = [](const void* obj) -> std::string { return detail::generic_container_to_json(&info, obj); };
+      info.from_json = [](void* obj, const std::string& text) -> bool { return detail::generic_container_from_json(&info, obj, text); };
+      initialized     = true;
+    }
     return &info;
   }
 };
