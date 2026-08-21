@@ -25,7 +25,7 @@ public:
 #pragma GCC diagnostic ignored "-Winvalid-offsetof"
   static const PropInfo* get_propinfo() {
     static const PropInfo rule = {
-        {"vertex_count", PropType::Int, offsetof(Mesh, vertex_count), sizeof(int), false},
+        {"vertex_count", offsetof(Mesh, vertex_count), prop_info_of<int32_t>()},
     };
     return &rule;
   }
@@ -81,11 +81,11 @@ public:
 #pragma GCC diagnostic ignored "-Winvalid-offsetof"
   static const PropInfo* get_propinfo() {
     static const PropInfo rule = {
-        {"name", PropType::Str, offsetof(Model, name), sizeof(Str), true},
-        {"position", PropType::Vec3, offsetof(Model, position), sizeof(Vec3f), false}, // float[3]とVec3fはバイト互換
-        PropInfo::Data::make_ref<Model>("parent", offsetof(Model, parent)),
-        PropInfo::Data::make_ref_list<Mesh>("meshes", offsetof(Model, meshes)),
-        PropInfo::Data::make_ref_list<Model>("children", offsetof(Model, children)),
+        {"name", offsetof(Model, name), prop_info_of<Str>()},
+        {"position", offsetof(Model, position), prop_info_of<Vec3f>()}, // float[3]とVec3fはバイト互換
+        PropInfo::Field::make_ref<Model>("parent", offsetof(Model, parent)),
+        PropInfo::Field::make_ref_list<Mesh>("meshes", offsetof(Model, meshes)),
+        PropInfo::Field::make_ref_list<Model>("children", offsetof(Model, children)),
     };
     return &rule;
   }

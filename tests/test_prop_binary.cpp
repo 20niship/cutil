@@ -1,15 +1,36 @@
 #include "doctest.h"
+#include <cstddef>
 #include <cutil/prop.hpp>
 #include <cutil/prop_io.hpp>
 
 using cutil::Prop;
-using cutil::PropType;
+using cutil::PropInfo;
 using cutil::Quat;
 using cutil::Range;
 using cutil::Rect;
 using cutil::Rect3D;
 using cutil::Vec3f;
 using cutil::Vec4f;
+
+namespace {
+
+struct VersionedThing {
+  int32_t x = 0;
+  float y   = 0;
+};
+
+} // namespace
+
+namespace cutil {
+template <> struct PropInfoOf<VersionedThing> {
+  static const PropInfo* get() {
+    return register_struct_type<VersionedThing>("VersionedThing", {
+                                                                        {"x", offsetof(VersionedThing, x), prop_info_of<int32_t>()},
+                                                                        {"y", offsetof(VersionedThing, y), prop_info_of<float>()},
+                                                                    });
+  }
+};
+} // namespace cutil
 
 TEST_SUITE("prop_dump_binary / prop_load_binary - POD only") {
   TEST_CASE("round-trip preserves POD field values (bit-exact)") {
@@ -41,7 +62,7 @@ TEST_SUITE("prop_dump_binary / prop_load_binary - POD only") {
     CHECK(b.get<Rect3D>("bbox").x.max == doctest::Approx(1.0f));
   }
 
-  TEST_CASE("pointer-type fields (Str) round-trip via the pointer blob path") {
+  TEST_CASE("pointer-type fields (Str) round-trip via the blob path") {
     Prop a;
     a.set<int32_t>("hp", 1);
     a.set<cutil::Str>("name", cutil::Str("hello"));
@@ -78,25 +99,24 @@ TEST_SUITE("prop_dump_binary / prop_load_binary - POD only") {
     CHECK(!cutil::prop_load_binary(b, bytes));
   }
 
-  TEST_CASE("version mismatch triggers fallback") {
+  TEST_CASE("type version mismatch uses per-type slow path instead of a whole-Prop fallback") {
+    auto* info                = const_cast<PropInfo*>(cutil::prop_info_of<VersionedThing>());
+    uint32_t original_version = info->version;
+
     Prop a;
-    a.set<int32_t>("x", 1);
+    a.set<VersionedThing>("v", VersionedThing{42, 1.5f});
     std::vector<uint8_t> bytes;
-    cutil::prop_dump_binary(a, bytes);
+    CHECK(cutil::prop_dump_binary(a, bytes));
 
-    // 既存のフィールドと異なるversionを事前にセットしたPropに対してloadすると
-    // フォールバックが発火する。
+    info->version = original_version + 1; // 保存後にプロセス内スキーマのversionを上げ、ファイル記録と不一致にする
+
     Prop b;
-    b.set<int32_t>("x", 999);
-    // bのフィールドのversionを直接書き換えて不一致を作る
-    const_cast<cutil::PropInfo&>(b.infos())[0].version = 2;
+    bool ok = cutil::prop_load_binary(b, bytes); // fallbackコールバックなしでも、型単位のslow pathでそのフィールドだけ復元を試みる
+    info->version = original_version;            // 後片付け(他テストへ影響しないように)
 
-    bool fallback_called = false;
-    cutil::prop_load_binary(b, bytes, [&](Prop&, const std::vector<uint8_t>&) {
-      fallback_called = true;
-      return true;
-    });
-    CHECK(fallback_called);
+    CHECK(ok);
+    CHECK(b.get<VersionedThing>("v").x == 42);
+    CHECK(b.get<VersionedThing>("v").y == doctest::Approx(1.5f));
   }
 
   TEST_CASE("out-of-range data_offset/size fails safely instead of crashing") {
@@ -104,12 +124,13 @@ TEST_SUITE("prop_dump_binary / prop_load_binary - POD only") {
     a.set<int32_t>("x", 1);
     std::vector<uint8_t> bytes;
     cutil::prop_dump_binary(a, bytes);
-    // EntryTable内のdata_sizeを巨大な値に書き換えて破損データを模擬する
-    size_t entry_offset  = sizeof(cutil::PropFileHeader);
-    cutil::PropEntryHeader eh;
-    std::memcpy(&eh, bytes.data() + entry_offset, sizeof(eh));
-    eh.data_size = 0xFFFFFFFFu;
-    std::memcpy(bytes.data() + entry_offset, &eh, sizeof(eh));
+
+    // int32_tはfield_count==0のleaf型なのでEntryTableはFileHeader+SchemaEntry1個分の後にある。
+    size_t entry_offset = sizeof(cutil::PropFileHeader) + sizeof(cutil::PropSchemaEntry);
+    cutil::PropValueEntry ve;
+    std::memcpy(&ve, bytes.data() + entry_offset, sizeof(ve));
+    ve.data_size = 0xFFFFFFFFu;
+    std::memcpy(bytes.data() + entry_offset, &ve, sizeof(ve));
 
     Prop b;
     bool ok = cutil::prop_load_binary(b, bytes);

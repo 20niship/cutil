@@ -5,7 +5,6 @@
 using cutil::Path;
 using cutil::Prop;
 using cutil::PropInfo;
-using cutil::PropType;
 using cutil::Quat;
 using cutil::Rect3D;
 using cutil::Str;
@@ -30,15 +29,15 @@ struct Model3D {
 // 型ごとに一度だけ静的に生成される「ルール」。
 const PropInfo& Model3DInfo() {
   static const PropInfo rule = {
-      {"pos", PropType::Vec3, offsetof(Model3D, pos), sizeof(Model3D::pos), false},
-      {"scale", PropType::Vec3, offsetof(Model3D, scale), sizeof(Model3D::scale), false},
-      {"quat", PropType::Quat, offsetof(Model3D, quat), sizeof(Model3D::quat), false},
-      {"path", PropType::Path, offsetof(Model3D, path), sizeof(Model3D::path), true},
-      {"name", PropType::Str, offsetof(Model3D, name), sizeof(Model3D::name), true},
-      {"visible", PropType::Bool, offsetof(Model3D, visible), sizeof(Model3D::visible), false},
-      {"animate", PropType::Bool, offsetof(Model3D, animate), sizeof(Model3D::animate), false},
-      {"bbox", PropType::Rect3D, offsetof(Model3D, bbox), sizeof(Model3D::bbox), false},
-      {"color", PropType::Vec4, offsetof(Model3D, color), sizeof(Model3D::color), false},
+      {"pos", offsetof(Model3D, pos), cutil::prop_info_of<Vec3f>()},
+      {"scale", offsetof(Model3D, scale), cutil::prop_info_of<Vec3f>()},
+      {"quat", offsetof(Model3D, quat), cutil::prop_info_of<Quat<float>>()},
+      {"path", offsetof(Model3D, path), cutil::prop_info_of<Path>()},
+      {"name", offsetof(Model3D, name), cutil::prop_info_of<Str>()},
+      {"visible", offsetof(Model3D, visible), cutil::prop_info_of<bool>()},
+      {"animate", offsetof(Model3D, animate), cutil::prop_info_of<bool>()},
+      {"bbox", offsetof(Model3D, bbox), cutil::prop_info_of<Rect3D>()},
+      {"color", offsetof(Model3D, color), cutil::prop_info_of<Vec4f>()},
   };
   return rule;
 }
@@ -115,11 +114,11 @@ TEST_SUITE("Prop - dump/load_to with external struct") {
     a.name = Str("v1");
     Prop p;
     p.dump(&a, &Model3DInfo());
-    CHECK(p.field_count() == Model3DInfo().size());
+    CHECK(p.field_count() == Model3DInfo().fields.size());
 
     a.name = Str("v2, now long enough to require heap allocation for this string");
     p.dump(&a, &Model3DInfo());
-    CHECK(p.field_count() == Model3DInfo().size()); // フィールド数は増えない(上書き)
+    CHECK(p.field_count() == Model3DInfo().fields.size()); // フィールド数は増えない(上書き)
 
     Model3D b;
     CHECK(p.load_to(&b, &Model3DInfo()));
