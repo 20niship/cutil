@@ -1,15 +1,9 @@
 #include "doctest.h"
-#include <cstdio>
 #include <cutil/prop.hpp>
 #include <cutil/prop_io.hpp>
-#include <cutil/prop_registry.hpp>
-#include <new>
-#include <string>
 
-using cutil::CustomSlot;
-using cutil::CustomTypeOps;
-using cutil::CustomTypeRegistry;
 using cutil::Prop;
+using cutil::PropInfo;
 using cutil::Quat;
 using cutil::Range;
 using cutil::Rect;
@@ -31,7 +25,6 @@ std::string dummy_point_to_json(const void* obj) {
 }
 
 bool dummy_point_from_json(void* obj, const std::string& json) {
-  // 簡易パーサ(テスト専用): "{"x":<int>,"y":<int>}" 形式のみ対応
   int x = 0, y = 0;
   if(std::sscanf(json.c_str(), "{\"x\":%d,\"y\":%d}", &x, &y) != 2) return false;
   new(obj) DummyPoint{x, y};
@@ -39,16 +32,7 @@ bool dummy_point_from_json(void* obj, const std::string& json) {
 }
 
 struct RegistryFixture {
-  RegistryFixture() {
-    CustomTypeOps ops;
-    ops.size      = sizeof(DummyPoint);
-    ops.align     = alignof(DummyPoint);
-    ops.copy_ctor = [](void* dst, const void* src) { new(dst) DummyPoint(*reinterpret_cast<const DummyPoint*>(src)); };
-    ops.dtor      = [](void* obj) { reinterpret_cast<DummyPoint*>(obj)->~DummyPoint(); };
-    ops.to_json   = dummy_point_to_json;
-    ops.from_json = dummy_point_from_json;
-    CustomTypeRegistry::instance().register_type("DummyPoint", ops);
-  }
+  RegistryFixture() { cutil::register_dynamic_type<DummyPoint>("DummyPoint", dummy_point_to_json, dummy_point_from_json); }
 };
 
 } // namespace
@@ -133,35 +117,29 @@ TEST_SUITE("prop_dump_json / prop_load_json") {
   }
 }
 
-TEST_SUITE("prop_load_binary - JSON fallback on version mismatch") {
-  TEST_CASE("automatic embedded-json fallback fires when no explicit fallback given") {
+TEST_SUITE("prop_load_binary - JSON fallback on corrupted files") {
+  TEST_CASE("automatic embedded-json fallback fires when magic is corrupted and no explicit fallback given") {
+    // JsonBlock常時併載は廃止されたため、fallback未指定時は復元不能でfalseを返す(Dynamic型のBlobBlock内jsonのみ個別に残る)。
     Prop a;
     a.set<int32_t>("x", 100);
 
     std::vector<uint8_t> bytes;
     CHECK(cutil::prop_dump_binary(a, bytes));
+    bytes[0] = 'X'; // magicを破壊
 
     Prop b;
-    b.set<int32_t>("x", 1);
-    // bのフィールドのversionを直接書き換えて、ファイル側と不一致にする
-    b.set_field_version("x", 2);
-
-    // fallbackを明示的に渡さない -> 埋め込みJSONブロックが自動的に使われる
-    CHECK(cutil::prop_load_binary(b, bytes));
-    CHECK(b.get<int32_t>("x") == 100);
+    CHECK(!cutil::prop_load_binary(b, bytes));
   }
 
-  TEST_CASE("explicit fallback still takes precedence over embedded json") {
+  TEST_CASE("explicit fallback is used for corrupted files") {
     Prop a;
     a.set<int32_t>("x", 100);
     std::vector<uint8_t> bytes;
     cutil::prop_dump_binary(a, bytes);
-
-    Prop b;
-    b.set<int32_t>("x", 1);
-    b.set_field_version("x", 2);
+    bytes[0] = 'X';
 
     bool custom_fallback_called = false;
+    Prop b;
     cutil::prop_load_binary(b, bytes, [&](Prop&, const std::vector<uint8_t>&) {
       custom_fallback_called = true;
       return true;

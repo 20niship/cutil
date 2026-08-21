@@ -7,8 +7,6 @@
 #include <string>
 
 using cutil::CustomSlot;
-using cutil::CustomTypeOps;
-using cutil::CustomTypeRegistry;
 using cutil::Path;
 using cutil::Prop;
 using cutil::Str;
@@ -33,21 +31,12 @@ bool dummy_point_from_json(void* obj, const std::string& json) {
 }
 
 struct RegistryFixture {
-  RegistryFixture() {
-    CustomTypeOps ops;
-    ops.size      = sizeof(DummyPoint);
-    ops.align     = alignof(DummyPoint);
-    ops.copy_ctor = [](void* dst, const void* src) { new(dst) DummyPoint(*reinterpret_cast<const DummyPoint*>(src)); };
-    ops.dtor      = [](void* obj) { reinterpret_cast<DummyPoint*>(obj)->~DummyPoint(); };
-    ops.to_json   = dummy_point_to_json;
-    ops.from_json = dummy_point_from_json;
-    CustomTypeRegistry::instance().register_type("DummyPoint", ops);
-  }
+  RegistryFixture() { cutil::register_dynamic_type<DummyPoint>("DummyPoint", dummy_point_to_json, dummy_point_from_json); }
 };
 
 } // namespace
 
-TEST_SUITE("prop_dump_binary / prop_load_binary - pointer types (Phase 7)") {
+TEST_SUITE("prop_dump_binary / prop_load_binary - Indirect/Dynamic types") {
   TEST_CASE("Str round-trip: SSO (short) and heap (long) both work") {
     Prop a;
     a.set<Str>("short_name", Str("abc"));
@@ -153,19 +142,18 @@ TEST_SUITE("prop_dump_binary / prop_load_binary - pointer types (Phase 7)") {
     std::vector<uint8_t> bytes;
     cutil::prop_dump_binary(a, bytes);
 
-    // EntryTable内の該当エントリのdata_offsetから PropPointerDesc を読み取り、
-    // blob_sizeを巨大な値に書き換えて破損データを模擬する。
-    size_t entry_offset = sizeof(cutil::PropFileHeader);
-    cutil::PropEntryHeader eh;
-    std::memcpy(&eh, bytes.data() + entry_offset, sizeof(eh));
-    REQUIRE((eh.flags & 0x1u) != 0);
+    // Strはfield_count==0のleaf Indirect型なのでSchemaSectionはSchemaEntry1個分のみ。
+    size_t entry_offset = sizeof(cutil::PropFileHeader) + sizeof(cutil::PropSchemaEntry);
+    cutil::PropValueEntry ve;
+    std::memcpy(&ve, bytes.data() + entry_offset, sizeof(ve));
 
-    size_t data_block_offset = entry_offset + sizeof(cutil::PropEntryHeader);
-    size_t pd_offset          = data_block_offset + eh.data_offset;
-    cutil::PropPointerDesc pd;
-    std::memcpy(&pd, bytes.data() + pd_offset, sizeof(pd));
-    pd.blob_size = 0xFFFFFFFFu;
-    std::memcpy(bytes.data() + pd_offset, &pd, sizeof(pd));
+    size_t data_block_offset = entry_offset + sizeof(cutil::PropValueEntry);
+    size_t desc_offset        = data_block_offset + ve.data_offset;
+    uint32_t blob_offset = 0, blob_size = 0;
+    std::memcpy(&blob_offset, bytes.data() + desc_offset, 4);
+    std::memcpy(&blob_size, bytes.data() + desc_offset + 4, 4);
+    blob_size = 0xFFFFFFFFu;
+    std::memcpy(bytes.data() + desc_offset + 4, &blob_size, 4);
 
     Prop b;
     bool ok = cutil::prop_load_binary(b, bytes);

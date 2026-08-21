@@ -5,10 +5,11 @@
 #include <string>
 
 using cutil::CustomSlot;
-using cutil::CustomTypeOps;
-using cutil::CustomTypeRegistry;
 using cutil::Prop;
-using cutil::register_custom_type;
+using cutil::PropInfo;
+using cutil::PropInfoRegistry;
+using cutil::PropKlass;
+using cutil::register_dynamic_type;
 
 namespace {
 
@@ -24,24 +25,25 @@ struct DummyVideoClip {
 };
 
 struct RegistryFixture {
-  RegistryFixture() { register_custom_type<DummyVideoClip>("DummyVideoClip"); }
+  RegistryFixture() { register_dynamic_type<DummyVideoClip>("DummyVideoClip"); }
 };
 
 } // namespace
 
-TEST_SUITE("CustomTypeRegistry") {
+TEST_SUITE("PropInfoRegistry") {
   TEST_CASE("register and find a type") {
     RegistryFixture fixture;
-    const CustomTypeOps* ops = CustomTypeRegistry::instance().find("DummyVideoClip");
-    REQUIRE(ops != nullptr);
-    CHECK(ops->size == sizeof(DummyVideoClip));
-    CHECK(ops->align == alignof(DummyVideoClip));
-    CHECK(ops->copy_ctor != nullptr);
-    CHECK(ops->dtor != nullptr);
+    const PropInfo* info = PropInfoRegistry::instance().find("DummyVideoClip");
+    REQUIRE(info != nullptr);
+    CHECK(info->klass == PropKlass::Dynamic);
+    CHECK(info->size == sizeof(DummyVideoClip));
+    CHECK(info->align == alignof(DummyVideoClip));
+    CHECK(info->copy_ctor != nullptr);
+    CHECK(info->dtor != nullptr);
   }
 
   TEST_CASE("find unregistered type returns nullptr") {
-    CHECK(CustomTypeRegistry::instance().find("NonexistentType12345") == nullptr);
+    CHECK(PropInfoRegistry::instance().find("NonexistentType12345") == nullptr);
   }
 }
 
@@ -115,8 +117,8 @@ TEST_SUITE("Prop - Custom fields via set_custom/get_custom") {
       CustomSlot video;
     };
 
-    static const cutil::PropInfo rule = {
-        {"video", cutil::PropType::Custom, offsetof(Entity, video), sizeof(Entity::video), true},
+    static const PropInfo rule = {
+        {"video", offsetof(Entity, video), cutil::prop_info_of<CustomSlot>()},
     };
 
     Entity a;
