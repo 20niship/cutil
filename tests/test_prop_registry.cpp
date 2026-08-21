@@ -7,7 +7,7 @@ using cutil::CustomSlot;
 using cutil::Prop;
 using cutil::PropInfo;
 using cutil::PropInfoRegistry;
-using cutil::PropKlass;
+using cutil::PropClass;
 using cutil::register_dynamic_type;
 
 namespace {
@@ -34,7 +34,7 @@ TEST_SUITE("PropInfoRegistry") {
     RegistryFixture fixture;
     const PropInfo* info = PropInfoRegistry::instance().find("DummyVideoClip");
     REQUIRE(info != nullptr);
-    CHECK(info->klass == PropKlass::Dynamic);
+    CHECK(info->klass == PropClass::Dynamic);
     CHECK(info->size == sizeof(DummyVideoClip));
     CHECK(info->align == alignof(DummyVideoClip));
     CHECK(info->copy_ctor != nullptr);

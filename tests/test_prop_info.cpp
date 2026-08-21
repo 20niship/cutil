@@ -5,7 +5,7 @@ using cutil::align_up;
 using cutil::has_flag;
 using cutil::PropFlags;
 using cutil::PropInfo;
-using cutil::PropKlass;
+using cutil::PropClass;
 using cutil::validate;
 using Field = cutil::PropInfo::Field;
 
@@ -74,19 +74,19 @@ TEST_SUITE("PropInfo - Basic Operations") {
     CHECK(align_up(9, 8) == 16);
   }
 
-  TEST_CASE("PropKlass classifies Trivial vs Indirect vs Dynamic") {
-    CHECK(cutil::prop_info_of<bool>()->klass == PropKlass::Trivial);
-    CHECK(cutil::prop_info_of<int32_t>()->klass == PropKlass::Trivial);
-    CHECK(cutil::prop_info_of<float>()->klass == PropKlass::Trivial);
-    CHECK(cutil::prop_info_of<cutil::Vec3f>()->klass == PropKlass::Trivial);
-    CHECK(cutil::prop_info_of<cutil::Vec4f>()->klass == PropKlass::Trivial);
-    CHECK(cutil::prop_info_of<cutil::Quat<float>>()->klass == PropKlass::Trivial);
-    CHECK(cutil::prop_info_of<cutil::Range>()->klass == PropKlass::Trivial);
-    CHECK(cutil::prop_info_of<cutil::Rect>()->klass == PropKlass::Trivial);
-    CHECK(cutil::prop_info_of<cutil::Rect3D>()->klass == PropKlass::Trivial);
-    CHECK(cutil::prop_info_of<cutil::Str>()->klass == PropKlass::Indirect);
-    CHECK(cutil::prop_info_of<cutil::Path>()->klass == PropKlass::Indirect);
-    CHECK(cutil::prop_info_of<std::vector<uint8_t>>()->klass == PropKlass::Indirect);
-    CHECK(cutil::prop_info_of<cutil::CustomSlot>()->klass == PropKlass::Dynamic);
+  TEST_CASE("PropClass classifies Trivial vs Indirect vs Dynamic") {
+    CHECK(cutil::prop_info_of<bool>()->klass == PropClass::Trivial);
+    CHECK(cutil::prop_info_of<int32_t>()->klass == PropClass::Trivial);
+    CHECK(cutil::prop_info_of<float>()->klass == PropClass::Trivial);
+    CHECK(cutil::prop_info_of<cutil::Vec3f>()->klass == PropClass::Trivial);
+    CHECK(cutil::prop_info_of<cutil::Vec4f>()->klass == PropClass::Trivial);
+    CHECK(cutil::prop_info_of<cutil::Quat<float>>()->klass == PropClass::Trivial);
+    CHECK(cutil::prop_info_of<cutil::Range>()->klass == PropClass::Trivial);
+    CHECK(cutil::prop_info_of<cutil::Rect>()->klass == PropClass::Trivial);
+    CHECK(cutil::prop_info_of<cutil::Rect3D>()->klass == PropClass::Trivial);
+    CHECK(cutil::prop_info_of<cutil::Str>()->klass == PropClass::Indirect);
+    CHECK(cutil::prop_info_of<cutil::Path>()->klass == PropClass::Indirect);
+    CHECK(cutil::prop_info_of<std::vector<uint8_t>>()->klass == PropClass::Indirect);
+    CHECK(cutil::prop_info_of<cutil::CustomSlot>()->klass == PropClass::Dynamic);
   }
 }

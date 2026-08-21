@@ -11,7 +11,7 @@
 
 対象ファイル:
 
-- `cutil/prop_registry.hpp` — `PropInfo`本体、`PropKlass`、`prop_info_of<T>()`、`PropInfoRegistry`、`CustomSlot`
+- `cutil/prop_registry.hpp` — `PropInfo`本体、`PropClass`、`prop_info_of<T>()`、`PropInfoRegistry`、`CustomSlot`
 - `cutil/prop.hpp` — `Prop`本体
 - `cutil/prop_io.hpp` — JSON/バイナリでのdump/load(ファイルI/O相当)
 - `tests/entity.hpp` — `Model`/`Mesh`を使った実装例
@@ -44,7 +44,7 @@ Prop& stats = p.get_child("stats");
 
 `set<T>()`と同じ型で再度`set`すると値が上書きされ、違う型で呼ぶと例外(`std::logic_error`)になります。
 
-## 2. PropKlass の3分類: Trivial / Indirect / Dynamic
+## 2. PropClass の3分類: Trivial / Indirect / Dynamic
 
 `PropInfo::klass`が、その型をどうシリアライズするかを決めます。
 
@@ -69,7 +69,7 @@ Indirect型は入れ子にできます。例えば`uiVector<Vertex>`(VertexはTr
 ```cpp
 struct PropInfo {
   char id[32];             // 型名。PropInfoRegistryのキーと一致させる
-  PropKlass klass;
+  PropClass klass;
   size_t size, align;
   uint32_t version;        // 型スキーマ全体のバージョン(per-fieldではなく型単位)
 
@@ -329,7 +329,7 @@ flowchart TD
 erDiagram
     PropInfo {
         char id "型名 (PropInfoRegistryのキー)"
-        PropKlass klass "Trivial/Indirect/Dynamic"
+        PropClass klass "Trivial/Indirect/Dynamic"
         size_t size
         size_t align
         uint32_t version
