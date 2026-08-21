@@ -2,7 +2,6 @@
 #include <cstdio>
 #include <cutil/prop.hpp>
 #include <cutil/prop_io.hpp>
-#include <cutil/prop_registry.hpp>
 #include <new>
 #include <string>
 

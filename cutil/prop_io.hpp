@@ -7,7 +7,6 @@
 #include <string>
 #include <vector>
 
-#include <cutil/json.hpp>
 #include <cutil/prop.hpp>
 
 // cutil::prop_dump_binary/prop_load_binary: PropKlass(Trivial/Indirect/Dynamic)に基づく新フォーマット(Issue #21)。型ごとに1回だけ[SchemaSection]に記録し[EntryTable]は名前+schema参照+offset/sizeのみの軽量レコードにする(旧設計はフィールドごとに496バイト級メタデータを値ごとに毎回書いていた)。レイアウトは[FileHeader]+[SchemaSection]+[EntryTable]+[DataBlock]+[BlobBlock]で、JsonBlock常時併載は廃止しDynamic型のみBlobBlock内に個別jsonを持つ。
@@ -129,58 +128,50 @@ inline size_t read_value_binary(const PropInfo* type, void* obj, const uint8_t* 
   return offset;
 }
 
-inline json::Value floats_to_json(const float* data, size_t n) {
-  json::Value arr = json::Value::make_array();
-  for(size_t i = 0; i < n; i++) arr.push_back(json::Value::make_double(static_cast<double>(data[i])));
-  return arr;
-}
-
 } // namespace detail
 
 // dump: 全フィールドを人間可読なJSON文字列へ変換する。各フィールドの型のto_json()を呼ぶだけで済み型ごとのswitch分岐は不要になった。
 inline bool prop_dump_json(const Prop& prop, std::string& out) {
-  json::Value root    = json::Value::make_object();
   const uint8_t* base = prop.raw_data();
-
+  std::string body     = "{";
+  bool first            = true;
   for(const auto& f : prop.fields()) {
-    json::Value field = json::Value::make_object();
-    field.set("type_id", json::Value::make_string(f.type->id));
-    field.set("version", json::Value::make_int(f.type->version));
-    bool ok;
-    field.set("value", json::Value::parse(f.type->to_json(base + f.offset), &ok));
-    root.set(f.name, field);
+    if(!first) body += ",";
+    first = false;
+    body += detail::json_quote(f.name) + ":{" + detail::json_quote("type_id") + ":" + detail::json_quote(f.type->id) + "," + detail::json_quote("version") + ":" + std::to_string(f.type->version) + "," +
+            detail::json_quote("value") + ":" + f.type->to_json(base + f.offset) + "}";
   }
-
-  out = root.dump();
+  body += "}";
+  out = body;
   return true;
 }
 
 // load: JSON文字列からPropを復元する。フィールドのtype_idをPropInfoRegistryで引き直しfrom_json()で値を再構築する。
 inline bool prop_load_json(Prop& prop, const std::string& text) {
-  bool ok           = false;
-  json::Value root = json::Value::parse(text, &ok);
-  if(!ok || !root.is_object()) return false;
+  std::string trimmed = detail::json_trim(text);
+  if(trimmed.size() < 2 || trimmed.front() != '{' || trimmed.back() != '}') return false;
+  for(const auto& part : detail::json_split_top_level(text)) {
+    std::string field_name, field_body;
+    if(!detail::json_split_kv(part, field_name, field_body)) continue;
 
-  for(const std::string& name : root.keys()) {
-    json::Value field    = root.get(name);
-    std::string type_id  = field.get("type_id").as_string();
-    json::Value value    = field.get("value");
-
-    const PropInfo* type = PropInfoRegistry::instance().find(type_id);
-    if(!type) continue; // 現行コードに存在しない型は復元不能としてスキップする
-
-    std::vector<uint8_t> storage(type->size);
-    if(type->klass == PropKlass::Trivial) {
-      // Trivial型もJSON経由復元にはfrom_jsonが必須(prop_registry.hppの全組み込みTrivial型に実装済み)。
-      if(!type->from_json || !type->from_json(storage.data(), value.dump())) continue;
-    } else {
-      if(!type->from_json(storage.data(), value.dump())) continue;
+    std::string type_id, value_json;
+    for(const auto& kv : detail::json_split_top_level(field_body)) {
+      std::string k, v;
+      if(!detail::json_split_kv(kv, k, v)) continue;
+      if(k == "type_id") type_id = detail::json_unquote(v);
+      else if(k == "value") value_json = v;
     }
 
+    const PropInfo* type = PropInfoRegistry::instance().find(type_id);
+    if(!type || !type->from_json) continue; // 現行コードに存在しない/from_json未登録の型は復元不能としてスキップする
+
+    std::vector<uint8_t> storage(type->size);
+    if(!type->from_json(storage.data(), value_json)) continue;
+
     if(type->klass == PropKlass::Trivial) {
-      prop.set_raw_pod_by_info(name.c_str(), type, storage.data());
+      prop.set_raw_pod_by_info(field_name.c_str(), type, storage.data());
     } else {
-      prop.adopt_raw_by_info(name.c_str(), type, storage.data());
+      prop.adopt_raw_by_info(field_name.c_str(), type, storage.data());
     }
   }
   return true;

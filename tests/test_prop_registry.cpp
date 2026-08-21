@@ -1,7 +1,6 @@
 #include "doctest.h"
 #include <cstddef>
 #include <cutil/prop.hpp>
-#include <cutil/prop_registry.hpp>
 #include <string>
 
 using cutil::CustomSlot;

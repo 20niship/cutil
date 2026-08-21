@@ -3,3 +3,4 @@
 #define CUTIL_IMPLEMENTATION
 #include <cutil/json.hpp>
 #include <cutil/path.hpp>
+#include <cutil/prop.hpp>
