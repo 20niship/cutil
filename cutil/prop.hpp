@@ -1,12 +1,9 @@
 #pragma once
 
-#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <new>
-#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -21,11 +18,8 @@
 #include <cutil/vec.hpp>
 #include <cutil/vector.hpp>
 
-// 非テンプレート実装本体はCUTIL_IMPLEMENTATIONを定義した唯一のTUでのみ実体化する(テンプレートはC++の制約上ヘッダに残す)。JSONは外部ライブラリ非依存。
-
 namespace cutil {
 
-// 参考用(旧設計、現在は未使用enum)。PropInfo::Field::type(const PropInfo*)による自己記述に置き換えた。
 enum class PropType : uint16_t {
   Bool,
   Int,
@@ -45,10 +39,10 @@ enum class PropType : uint16_t {
   RefList,
 };
 
-enum class PropKlass : uint8_t {
-  Trivial,
-  Indirect,
-  Dynamic,
+enum class PropClass : uint8_t {
+  Trivial,  // trivially copyableでmemcpyのみで保存/復元できる型
+  Indirect, // サイズは固定だが内部にヒープ領域への間接参照を持つ型(Str/std::vector<T>等)
+  Dynamic,  // サイズ不定形でjson経由でしか表現できない型(CustomSlot等)
 };
 
 enum class PropWidget {
@@ -72,40 +66,39 @@ enum class PropFlags : uint32_t {
 inline PropFlags operator|(PropFlags a, PropFlags b) { return static_cast<PropFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b)); }
 inline PropFlags operator&(PropFlags a, PropFlags b) { return static_cast<PropFlags>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b)); }
 inline bool has_flag(PropFlags flags, PropFlags test) { return (static_cast<uint32_t>(flags) & static_cast<uint32_t>(test)) != 0; }
-
 inline size_t align_up(size_t offset, size_t align) { return (offset + align - 1) & ~(align - 1); }
 
 struct PropInfo {
-  char id[32] = {}; // 型名。PropInfoRegistryのキーと一致させる
-  PropKlass klass  = PropKlass::Trivial;
+  char id[32]      = {}; // 型名。PropInfoRegistryのキーと一致させる
+  PropClass klass  = PropClass::Trivial;
   size_t size      = 0;
   size_t align     = 1;
   uint32_t version = 1; // 型スキーマ全体のバージョン(per-fieldではなく型単位)
 
   // ライフサイクル(旧CustomTypeOpsを吸収)。Trivialはnullのままでよい。
-  void (*copy_ctor)(void* dst, const void* src) = nullptr;
-  void (*dtor)(void* obj)                       = nullptr;
-  void (*default_ctor)(void* obj)               = nullptr;
-  std::string (*to_json)(const void* obj)                = nullptr; // Dynamicは必須
+  void (*copy_ctor)(void* dst, const void* src)      = nullptr;
+  void (*dtor)(void* obj)                            = nullptr;
+  void (*default_ctor)(void* obj)                    = nullptr;
+  std::string (*to_json)(const void* obj)            = nullptr; // Dynamicは必須
   bool (*from_json)(void* obj, const std::string& j) = nullptr;
 
   // Struct表現: 自分が集約型の場合のフィールド一覧(offsetofルール)
   struct Field {
-    char name[32]  = {};
-    char label[64] = {};
-    char desc[256] = {};
+    char name[32]     = {};
+    char label[64]    = {};
+    char desc[256]    = {};
     PropWidget widget = PropWidget::Auto;
     PropFlags flags   = PropFlags::None;
     float min_value = 0, max_value = 0, drag_speed = 1.0f;
 
-    size_t offset         = 0; // 親の中でのoffset(Prop::data_内 or 外部構造体内、文脈依存)
+    size_t offset        = 0;       // 親の中でのoffset(Prop::data_内 or 外部構造体内、文脈依存)
     const PropInfo* type = nullptr; // 旧PropType enumの代わり。組み込み/ユーザー型を同じ木で辿る
 
     // Ref/RefList用フック(次段階まで温存)。WeakPtr<T>/vector<Ref<T>>と生ポインタ(群)を相互変換する。
-    using RefExtractFn     = void* (*)(const void* field_ptr);
-    using RefAssignFn      = void (*)(void* field_ptr, void* raw_ptr);
-    using RefListExtractFn = void (*)(const void* field_ptr, std::vector<void*>& out);
-    using RefListAssignFn  = void (*)(void* field_ptr, const std::vector<void*>& in);
+    using RefExtractFn                = void* (*)(const void* field_ptr);
+    using RefAssignFn                 = void (*)(void* field_ptr, void* raw_ptr);
+    using RefListExtractFn            = void (*)(const void* field_ptr, std::vector<void*>& out);
+    using RefListAssignFn             = void (*)(void* field_ptr, const std::vector<void*>& in);
     RefExtractFn ref_extract          = nullptr;
     RefAssignFn ref_assign            = nullptr;
     RefListExtractFn ref_list_extract = nullptr;
@@ -114,59 +107,46 @@ struct PropInfo {
     Field() = default;
     Field(const char* name_, size_t offset_, const PropInfo* type_) : offset(offset_), type(type_) { set_name(name_); }
 
-    void set_name(const char* s) {
-      std::strncpy(name, s, sizeof(name) - 1);
-      name[sizeof(name) - 1] = '\0';
-    }
-    void set_label(const char* s) {
-      std::strncpy(label, s, sizeof(label) - 1);
-      label[sizeof(label) - 1] = '\0';
-    }
-    void set_desc(const char* s) {
-      std::strncpy(desc, s, sizeof(desc) - 1);
-      desc[sizeof(desc) - 1] = '\0';
-    }
+    // clang-format off
+    void set_name(const char* s)  { std::strncpy(name, s, sizeof(name) - 1); name[sizeof(name) - 1] = '\0'; }
+    void set_label(const char* s) { std::strncpy(label, s, sizeof(label) - 1); label[sizeof(label) - 1] = '\0'; }
+    void set_desc(const char* s)  { std::strncpy(desc, s, sizeof(desc) - 1); desc[sizeof(desc) - 1] = '\0'; }
+    // clang-format on
 
-    // make_ref<T>/make_ref_list<T>の定義はprop_info_of_ref_slot()等の後(このファイル下部)。
     template <typename T> static Field make_ref(const char* name_, size_t offset_);
     template <typename T> static Field make_ref_list(const char* name_, size_t offset_);
   };
   std::vector<Field> fields; // 空 = leaf型 or 可変長コンテナ
 
   // Indirect(B)の可変長コンテナ用アクセサ(配列は最大1本まで、複数本必要ならDynamicとして扱う)。
-  const PropInfo* element_type = nullptr;
-  size_t (*seq_size)(const void* obj)                                     = nullptr;
-  const void* (*seq_data)(const void* obj)                                = nullptr; // element Trivial限定、一括memcpy用
-  void (*seq_assign_raw)(void* obj, const void* src, size_t n)            = nullptr; // element Trivial限定、一括memcpy用
-  const void* (*seq_at)(const void* obj, size_t i)                        = nullptr; // element Indirect用、要素ごとアクセス
-  void (*seq_push_back_copy)(void* obj, const void* elem)                 = nullptr; // element Indirect用、要素ごと再構築
+  const PropInfo* element_type                                 = nullptr;
+  size_t (*seq_size)(const void* obj)                          = nullptr;
+  const void* (*seq_data)(const void* obj)                     = nullptr; // element Trivial限定、一括memcpy用
+  void (*seq_assign_raw)(void* obj, const void* src, size_t n) = nullptr; // element Trivial限定、一括memcpy用
+  const void* (*seq_at)(const void* obj, size_t i)             = nullptr; // element Indirect用、要素ごとアクセス
+  void (*seq_push_back_copy)(void* obj, const void* elem)      = nullptr; // element Indirect用、要素ごと再構築
 
-  PropInfo()                            = default;
-  PropInfo(const PropInfo&)             = default;
-  PropInfo& operator=(const PropInfo&)  = default;
-  PropInfo(PropInfo&&) noexcept         = default;
+  PropInfo()                               = default;
+  PropInfo(const PropInfo&)                = default;
+  PropInfo& operator=(const PropInfo&)     = default;
+  PropInfo(PropInfo&&) noexcept            = default;
   PropInfo& operator=(PropInfo&&) noexcept = default;
 
   // {"name", offset, type}の集約初期化でoffsetofルールを書ける(klass/copy_ctorを使わない軽量ルール用)。
   PropInfo(std::initializer_list<Field> list) : fields(list) {}
 
-  void set_id(const char* s) {
-    std::strncpy(id, s, sizeof(id) - 1);
-    id[sizeof(id) - 1] = '\0';
-  }
+  // clang-format off
+  void set_id(const char* s) { std::strncpy(id, s, sizeof(id) - 1); id[sizeof(id) - 1] = '\0'; }
 
   [[nodiscard]] const Field* find_field(const char* name) const {
-    for(const auto& f : fields) {
-      if(std::strncmp(f.name, name, sizeof(f.name)) == 0) return &f;
-    }
+    for(const auto& f : fields) if(std::strncmp(f.name, name, sizeof(f.name)) == 0) return &f;
     return nullptr;
   }
   [[nodiscard]] Field* find_field(const char* name) {
-    for(auto& f : fields) {
-      if(std::strncmp(f.name, name, sizeof(f.name)) == 0) return &f;
-    }
+    for(auto& f : fields) if(std::strncmp(f.name, name, sizeof(f.name)) == 0) return &f;
     return nullptr;
   }
+  // clang-format on
 };
 
 inline bool validate(const PropInfo::Field& f, float value) {
@@ -184,8 +164,8 @@ void register_prop_info_auto(const PropInfo* info); // 定義はCUTIL_IMPLEMENTA
 
 // prop_info_of<T>()呼び出し時(実質初回のみ)にPropInfoRegistryへも自動登録する。register_prop_type<T>(name)は別名登録用に残す。
 template <typename T> inline const PropInfo* prop_info_of() {
-  const PropInfo* info    = PropInfoOf<T>::get();
-  static bool registered  = (detail::register_prop_info_auto(info), true);
+  const PropInfo* info   = PropInfoOf<T>::get();
+  static bool registered = (detail::register_prop_info_auto(info), true);
   (void)registered;
   return info;
 }
@@ -268,10 +248,10 @@ inline std::vector<std::string> json_split_top_level(const std::string& s) {
   std::string trimmed = json_trim(s);
   if(trimmed.size() < 2) return result;
   std::string body = trimmed.substr(1, trimmed.size() - 2);
-  size_t n          = body.size();
-  size_t start       = 0;
-  int depth          = 0;
-  bool in_string     = false;
+  size_t n         = body.size();
+  size_t start     = 0;
+  int depth        = 0;
+  bool in_string   = false;
   for(size_t i = 0; i < n; i++) {
     char c = body[i];
     if(in_string) {
@@ -281,9 +261,12 @@ inline std::vector<std::string> json_split_top_level(const std::string& s) {
       }
       if(c == '"') in_string = false;
     } else {
-      if(c == '"') in_string = true;
-      else if(c == '[' || c == '{') depth++;
-      else if(c == ']' || c == '}') depth--;
+      if(c == '"')
+        in_string = true;
+      else if(c == '[' || c == '{')
+        depth++;
+      else if(c == ']' || c == '}')
+        depth--;
       else if(c == ',' && depth == 0) {
         result.push_back(json_trim(body.substr(start, i - start)));
         start = i + 1;
@@ -307,7 +290,8 @@ inline bool json_split_kv(const std::string& s, std::string& key, std::string& v
       }
       if(c == '"') in_string = false;
     } else {
-      if(c == '"') in_string = true;
+      if(c == '"')
+        in_string = true;
       else if(c == ':') {
         key   = json_unquote(json_trim(s.substr(0, i)));
         value = json_trim(s.substr(i + 1));
@@ -334,7 +318,7 @@ inline void json_floats_from_array(const std::string& text, float* out, size_t n
 
 // element_type/seq_*アクセサだけを頼りに任意コンテナ型をJSON化する共通実装(uiVector<T>/std::vector<T>が共有する)。
 inline std::string generic_container_to_json(const PropInfo* type, const void* obj) {
-  size_t n = type->seq_size(obj);
+  size_t n        = type->seq_size(obj);
   std::string out = "[";
   for(size_t i = 0; i < n; i++) {
     if(i) out += ",";
@@ -376,10 +360,10 @@ template <typename VecT, size_t N> const PropInfo* make_vec_propinfo(const char*
   static const PropInfo info = [id] {
     PropInfo p;
     p.set_id(id);
-    p.klass = PropKlass::Trivial;
-    p.size  = sizeof(VecT);
-    p.align = alignof(VecT);
-    p.to_json = [](const void* obj) -> std::string { return json_array_of_floats(reinterpret_cast<const VecT*>(obj)->data, N); };
+    p.klass     = PropClass::Trivial;
+    p.size      = sizeof(VecT);
+    p.align     = alignof(VecT);
+    p.to_json   = [](const void* obj) -> std::string { return json_array_of_floats(reinterpret_cast<const VecT*>(obj)->data, N); };
     p.from_json = [](void* obj, const std::string& text) -> bool {
       json_floats_from_array(text, reinterpret_cast<VecT*>(obj)->data, N);
       return true;
@@ -393,14 +377,14 @@ template <typename VecT, size_t N> const PropInfo* make_vec_propinfo(const char*
 inline void generic_struct_copy_ctor(const PropInfo* self, void* dst, const void* src) {
   std::memcpy(dst, src, self->size); // 浅いコピー(POD部分はこれで完結)
   for(const auto& f : self->fields) {
-    if(f.type->klass != PropKlass::Trivial && f.type->copy_ctor) {
+    if(f.type->klass != PropClass::Trivial && f.type->copy_ctor) {
       f.type->copy_ctor(reinterpret_cast<uint8_t*>(dst) + f.offset, reinterpret_cast<const uint8_t*>(src) + f.offset);
     }
   }
 }
 inline void generic_struct_dtor(const PropInfo* self, void* obj) {
   for(const auto& f : self->fields) {
-    if(f.type->klass != PropKlass::Trivial && f.type->dtor) {
+    if(f.type->klass != PropClass::Trivial && f.type->dtor) {
       f.type->dtor(reinterpret_cast<uint8_t*>(obj) + f.offset);
     }
   }
@@ -408,17 +392,17 @@ inline void generic_struct_dtor(const PropInfo* self, void* obj) {
 inline void generic_struct_default_ctor(const PropInfo* self, void* obj) {
   std::memset(obj, 0, self->size);
   for(const auto& f : self->fields) {
-    if(f.type->klass != PropKlass::Trivial && f.type->default_ctor) {
+    if(f.type->klass != PropClass::Trivial && f.type->default_ctor) {
       f.type->default_ctor(reinterpret_cast<uint8_t*>(obj) + f.offset);
     }
   }
 }
 inline std::string generic_struct_to_json(const PropInfo* self, const void* obj) {
   std::string out = "{";
-  bool first        = true;
+  bool first      = true;
   for(const auto& f : self->fields) {
     if(!first) out += ",";
-    first              = false;
+    first            = false;
     const auto* fptr = reinterpret_cast<const uint8_t*>(obj) + f.offset;
     out += json_quote(f.name) + ":" + f.type->to_json(fptr);
   }
@@ -426,15 +410,17 @@ inline std::string generic_struct_to_json(const PropInfo* self, const void* obj)
   return out;
 }
 inline bool generic_struct_from_json(const PropInfo* self, void* obj, const std::string& text) {
-  if(self->default_ctor) self->default_ctor(obj);
-  else std::memset(obj, 0, self->size);
+  if(self->default_ctor)
+    self->default_ctor(obj);
+  else
+    std::memset(obj, 0, self->size);
   for(const auto& part : json_split_top_level(text)) {
     std::string key, value;
     if(!json_split_kv(part, key, value)) continue;
     const PropInfo::Field* f = self->find_field(key.c_str());
     if(!f) continue;
     auto* fptr = reinterpret_cast<uint8_t*>(obj) + f->offset;
-    if(f->type->klass != PropKlass::Trivial && f->type->dtor) f->type->dtor(fptr); // default_ctorが構築した仮の値を破棄してから再構築する
+    if(f->type->klass != PropClass::Trivial && f->type->dtor) f->type->dtor(fptr); // default_ctorが構築した仮の値を破棄してから再構築する
     if(!f->type->from_json(fptr, value)) return false;
   }
   return true;
@@ -450,21 +436,22 @@ template <typename T> const PropInfo* register_struct_type(const char* name, std
     info.set_id(name);
     info.size  = sizeof(T);
     info.align = alignof(T);
-    info.klass = std::is_trivially_copyable_v<T> ? PropKlass::Trivial : PropKlass::Indirect;
+    info.klass = std::is_trivially_copyable_v<T> ? PropClass::Trivial : PropClass::Indirect;
     info.fields.assign(field_list);
-    if(info.klass != PropKlass::Trivial) {
+    if(info.klass != PropClass::Trivial) {
       info.copy_ctor    = [](void* dst, const void* src) { detail::generic_struct_copy_ctor(&info, dst, src); };
-      info.dtor          = [](void* obj) { detail::generic_struct_dtor(&info, obj); };
+      info.dtor         = [](void* obj) { detail::generic_struct_dtor(&info, obj); };
       info.default_ctor = [](void* obj) { detail::generic_struct_default_ctor(&info, obj); };
     }
     info.to_json   = [](const void* obj) -> std::string { return detail::generic_struct_to_json(&info, obj); };
     info.from_json = [](void* obj, const std::string& text) -> bool { return detail::generic_struct_from_json(&info, obj, text); };
-    initialized = true;
+    initialized    = true;
   }
   return &info;
 }
 
 // ---- 組み込みleaf型のPropInfoOf特殊化(宣言のみ、実装本体はCUTIL_IMPLEMENTATIONブロック) ----
+// clang-format off
 template <> struct PropInfoOf<bool> { static const PropInfo* get(); };
 template <> struct PropInfoOf<int32_t> { static const PropInfo* get(); };
 template <> struct PropInfoOf<float> { static const PropInfo* get(); };
@@ -478,6 +465,7 @@ template <> struct PropInfoOf<Rect3D> { static const PropInfo* get(); };
 template <> struct PropInfoOf<Str> { static const PropInfo* get(); };
 template <> struct PropInfoOf<Path> { static const PropInfo* get(); };
 template <> struct PropInfoOf<std::vector<uint8_t>> { static const PropInfo* get(); };
+// clang-format on
 
 // uiVector<T>はmalloc/memcpyベースで要素移動コンストラクタを呼ばないため要素はTrivial限定、B-in-Bにはstd::vector<T>を使うこと。
 template <typename T> struct PropInfoOf<uiVector<T>> {
@@ -487,15 +475,15 @@ template <typename T> struct PropInfoOf<uiVector<T>> {
     static bool initialized = false;
     if(!initialized) {
       info.set_id("uiVector<T>");
-      info.klass         = PropKlass::Indirect;
-      info.size          = sizeof(uiVector<T>);
-      info.align         = alignof(uiVector<T>);
-      info.copy_ctor     = [](void* dst, const void* src) { new(dst) uiVector<T>(*reinterpret_cast<const uiVector<T>*>(src)); };
-      info.dtor          = [](void* obj) { reinterpret_cast<uiVector<T>*>(obj)->~uiVector<T>(); };
-      info.default_ctor  = [](void* obj) { new(obj) uiVector<T>(); };
-      info.element_type  = prop_info_of<T>();
-      info.seq_size      = [](const void* obj) -> size_t { return static_cast<size_t>(reinterpret_cast<const uiVector<T>*>(obj)->size()); };
-      info.seq_data      = [](const void* obj) -> const void* { return reinterpret_cast<const void*>(reinterpret_cast<const uiVector<T>*>(obj)->begin()); };
+      info.klass          = PropClass::Indirect;
+      info.size           = sizeof(uiVector<T>);
+      info.align          = alignof(uiVector<T>);
+      info.copy_ctor      = [](void* dst, const void* src) { new(dst) uiVector<T>(*reinterpret_cast<const uiVector<T>*>(src)); };
+      info.dtor           = [](void* obj) { reinterpret_cast<uiVector<T>*>(obj)->~uiVector<T>(); };
+      info.default_ctor   = [](void* obj) { new(obj) uiVector<T>(); };
+      info.element_type   = prop_info_of<T>();
+      info.seq_size       = [](const void* obj) -> size_t { return static_cast<size_t>(reinterpret_cast<const uiVector<T>*>(obj)->size()); };
+      info.seq_data       = [](const void* obj) -> const void* { return reinterpret_cast<const void*>(reinterpret_cast<const uiVector<T>*>(obj)->begin()); };
       info.seq_assign_raw = [](void* obj, const void* src, size_t n) {
         auto* v = reinterpret_cast<uiVector<T>*>(obj);
         v->resize(static_cast<int>(n));
@@ -503,7 +491,7 @@ template <typename T> struct PropInfoOf<uiVector<T>> {
       };
       info.to_json   = [](const void* obj) -> std::string { return detail::generic_container_to_json(&info, obj); };
       info.from_json = [](void* obj, const std::string& text) -> bool { return detail::generic_container_from_json(&info, obj, text); };
-      initialized     = true;
+      initialized    = true;
     }
     return &info;
   }
@@ -516,7 +504,7 @@ template <typename T> struct PropInfoOf<std::vector<T>> {
     static bool initialized = false;
     if(!initialized) {
       info.set_id("std::vector<T>");
-      info.klass        = PropKlass::Indirect;
+      info.klass        = PropClass::Indirect;
       info.size         = sizeof(std::vector<T>);
       info.align        = alignof(std::vector<T>);
       info.copy_ctor    = [](void* dst, const void* src) { new(dst) std::vector<T>(*reinterpret_cast<const std::vector<T>*>(src)); };
@@ -537,7 +525,7 @@ template <typename T> struct PropInfoOf<std::vector<T>> {
       }
       info.to_json   = [](const void* obj) -> std::string { return detail::generic_container_to_json(&info, obj); };
       info.from_json = [](void* obj, const std::string& text) -> bool { return detail::generic_container_from_json(&info, obj, text); };
-      initialized     = true;
+      initialized    = true;
     }
     return &info;
   }
@@ -602,14 +590,14 @@ template <typename T> const PropInfo* register_dynamic_type(const std::string& n
   static bool initialized = false;
   if(!initialized) {
     info.set_id(name.c_str());
-    info.klass     = PropKlass::Dynamic;
+    info.klass     = PropClass::Dynamic;
     info.size      = sizeof(T);
     info.align     = alignof(T);
     info.copy_ctor = [](void* dst, const void* src) { new(dst) T(*reinterpret_cast<const T*>(src)); };
-    info.dtor       = [](void* obj) { reinterpret_cast<T*>(obj)->~T(); };
+    info.dtor      = [](void* obj) { reinterpret_cast<T*>(obj)->~T(); };
     info.to_json   = to_json;
     info.from_json = from_json;
-    initialized     = true;
+    initialized    = true;
   }
   PropInfoRegistry::instance().register_type(name, &info);
   return &info;
@@ -618,7 +606,7 @@ template <typename T> const PropInfo* register_dynamic_type(const std::string& n
 // CustomSlot: Dynamic(C)型の値を型消去して1個保持するラッパー。const PropInfo*を直接持つため旧来のtype_name文字列での毎回のレジストリ再検索が不要(高速化もする)。
 struct CustomSlot {
   const PropInfo* info = nullptr;
-  void* ptr             = nullptr;
+  void* ptr            = nullptr;
 
   CustomSlot() = default;
   ~CustomSlot();
@@ -667,7 +655,9 @@ private:
   void copy_from(const CustomSlot& other);
 };
 
-template <> struct PropInfoOf<CustomSlot> { static const PropInfo* get(); };
+template <> struct PropInfoOf<CustomSlot> {
+  static const PropInfo* get();
+};
 
 // Prop: フィールドの型情報はPropInfoへ完全委譲し、Prop自身は型ごとのswitchを持たない。
 class Prop {
@@ -677,8 +667,8 @@ public:
   Prop(const Prop& other) : data_(other.data_.size()), fields_(other.fields_) {
     for(const auto& f : fields_) {
       const uint8_t* src = other.data_.data() + f.offset;
-      uint8_t* dst        = data_.data() + f.offset;
-      if(f.type->klass == PropKlass::Trivial) {
+      uint8_t* dst       = data_.data() + f.offset;
+      if(f.type->klass == PropClass::Trivial) {
         std::memcpy(dst, src, f.type->size);
       } else {
         f.type->copy_ctor(dst, src);
@@ -714,8 +704,8 @@ public:
 
   template <typename T> void set(const char* name, const T& value, const char* label = nullptr, const char* desc = nullptr) {
     const PropInfo* type = prop_info_of<T>();
-    PropInfo::Field* f    = find_field(name);
-    bool is_new           = false;
+    PropInfo::Field* f   = find_field(name);
+    bool is_new          = false;
     if(!f) {
       f = &add_field(name, type);
       if(label) f->set_label(label);
@@ -726,7 +716,7 @@ public:
     }
 
     uint8_t* dst = data_.data() + f->offset;
-    if(type->klass == PropKlass::Trivial) {
+    if(type->klass == PropClass::Trivial) {
       std::memcpy(dst, &value, sizeof(T));
     } else {
       if(!is_new && type->dtor) type->dtor(dst); // 既存フィールドは一旦破棄してから再構築する(assign用の別関数は持たない)
@@ -753,7 +743,7 @@ public:
   bool erase(const char* name) {
     for(auto it = fields_.begin(); it != fields_.end(); ++it) {
       if(std::strncmp(it->name, name, sizeof(it->name)) == 0) {
-        if(it->type->klass != PropKlass::Trivial && it->type->dtor) it->type->dtor(data_.data() + it->offset);
+        if(it->type->klass != PropClass::Trivial && it->type->dtor) it->type->dtor(data_.data() + it->offset);
         fields_.erase(it);
         return true;
       }
@@ -829,8 +819,8 @@ public:
         continue;
       }
       const uint8_t* src = data_.data() + f->offset;
-      uint8_t* dst        = base + rf.offset;
-      if(rf.type->klass == PropKlass::Trivial) {
+      uint8_t* dst       = base + rf.offset;
+      if(rf.type->klass == PropClass::Trivial) {
         std::memcpy(dst, src, rf.type->size);
       } else {
         // dataは既に構築済みという呼び出し規約のため、既存オブジェクトを破棄してから再構築する
@@ -868,7 +858,7 @@ public:
 
   void adopt_raw_by_info(const char* name, const PropInfo* type, void* constructed_src) {
     PropInfo::Field* f = find_field(name);
-    bool is_new         = false;
+    bool is_new        = false;
     if(!f) {
       f      = &add_field(name, type);
       is_new = true;
@@ -917,7 +907,7 @@ private:
     }
 
     uint8_t* dst = data_.data() + f->offset;
-    if(type->klass == PropKlass::Trivial) {
+    if(type->klass == PropClass::Trivial) {
       std::memcpy(dst, src_ptr, type->size);
     } else {
       if(!is_new && type->dtor) type->dtor(dst);
@@ -927,430 +917,17 @@ private:
 
   void destroy_all_fields() {
     for(const auto& f : fields_) {
-      if(f.type->klass != PropKlass::Trivial && f.type->dtor) f.type->dtor(data_.data() + f.offset);
+      if(f.type->klass != PropClass::Trivial && f.type->dtor) f.type->dtor(data_.data() + f.offset);
     }
   }
 };
 
+// clang-format off
 template <> struct PropInfoOf<Prop> { static const PropInfo* get(); };
+// clang-format on
 
 } // namespace cutil
 
 #ifdef CUTIL_IMPLEMENTATION
-
-namespace cutil {
-
-const PropInfo* PropInfoOf<bool>::get() {
-  static const PropInfo info = [] {
-    PropInfo p;
-    p.set_id("bool");
-    p.klass   = PropKlass::Trivial;
-    p.size    = sizeof(bool);
-    p.align   = alignof(bool);
-    p.to_json = [](const void* obj) -> std::string { return *reinterpret_cast<const bool*>(obj) ? "true" : "false"; };
-    p.from_json = [](void* obj, const std::string& text) -> bool {
-      bool v = detail::json_trim(text) == "true";
-      std::memcpy(obj, &v, sizeof(bool));
-      return true;
-    };
-    return p;
-  }();
-  return &info;
-}
-
-const PropInfo* PropInfoOf<int32_t>::get() {
-  static const PropInfo info = [] {
-    PropInfo p;
-    p.set_id("int32_t");
-    p.klass   = PropKlass::Trivial;
-    p.size    = sizeof(int32_t);
-    p.align   = alignof(int32_t);
-    p.to_json = [](const void* obj) -> std::string { return std::to_string(*reinterpret_cast<const int32_t*>(obj)); };
-    p.from_json = [](void* obj, const std::string& text) -> bool {
-      int32_t v = static_cast<int32_t>(std::stoll(detail::json_trim(text)));
-      std::memcpy(obj, &v, sizeof(int32_t));
-      return true;
-    };
-    return p;
-  }();
-  return &info;
-}
-
-const PropInfo* PropInfoOf<float>::get() {
-  static const PropInfo info = [] {
-    PropInfo p;
-    p.set_id("float");
-    p.klass   = PropKlass::Trivial;
-    p.size    = sizeof(float);
-    p.align   = alignof(float);
-    p.to_json = [](const void* obj) -> std::string { return detail::json_number(static_cast<double>(*reinterpret_cast<const float*>(obj))); };
-    p.from_json = [](void* obj, const std::string& text) -> bool {
-      float v = static_cast<float>(std::stod(detail::json_trim(text)));
-      std::memcpy(obj, &v, sizeof(float));
-      return true;
-    };
-    return p;
-  }();
-  return &info;
-}
-
-const PropInfo* PropInfoOf<uint8_t>::get() {
-  static const PropInfo info = [] {
-    PropInfo p;
-    p.set_id("uint8_t");
-    p.klass   = PropKlass::Trivial;
-    p.size    = sizeof(uint8_t);
-    p.align   = alignof(uint8_t);
-    p.to_json = [](const void* obj) -> std::string { return std::to_string(*reinterpret_cast<const uint8_t*>(obj)); };
-    p.from_json = [](void* obj, const std::string& text) -> bool {
-      uint8_t v = static_cast<uint8_t>(std::stoi(detail::json_trim(text)));
-      std::memcpy(obj, &v, sizeof(uint8_t));
-      return true;
-    };
-    return p;
-  }();
-  return &info;
-}
-
-const PropInfo* PropInfoOf<Vec3f>::get() { return detail::make_vec_propinfo<Vec3f, 3>("Vec3f"); }
-const PropInfo* PropInfoOf<Vec4f>::get() { return detail::make_vec_propinfo<Vec4f, 4>("Vec4f"); }
-
-const PropInfo* PropInfoOf<Quat<float>>::get() {
-  static const PropInfo info = [] {
-    PropInfo p;
-    p.set_id("Quat<float>");
-    p.klass = PropKlass::Trivial;
-    p.size  = sizeof(Quat<float>);
-    p.align = alignof(Quat<float>);
-    p.to_json = [](const void* obj) -> std::string {
-      const auto& v = *reinterpret_cast<const Quat<float>*>(obj);
-      float f[4]     = {v.x, v.y, v.z, v.w};
-      return detail::json_array_of_floats(f, 4);
-    };
-    p.from_json = [](void* obj, const std::string& text) -> bool {
-      float f[4];
-      detail::json_floats_from_array(text, f, 4);
-      auto* v = reinterpret_cast<Quat<float>*>(obj);
-      v->x    = f[0];
-      v->y    = f[1];
-      v->z    = f[2];
-      v->w    = f[3];
-      return true;
-    };
-    return p;
-  }();
-  return &info;
-}
-
-const PropInfo* PropInfoOf<Range>::get() {
-  static const PropInfo info = [] {
-    PropInfo p;
-    p.set_id("Range");
-    p.klass = PropKlass::Trivial;
-    p.size  = sizeof(Range);
-    p.align = alignof(Range);
-    p.to_json = [](const void* obj) -> std::string {
-      const auto& v = *reinterpret_cast<const Range*>(obj);
-      float f[2]     = {v.min, v.max};
-      return detail::json_array_of_floats(f, 2);
-    };
-    p.from_json = [](void* obj, const std::string& text) -> bool {
-      float f[2];
-      detail::json_floats_from_array(text, f, 2);
-      auto* v = reinterpret_cast<Range*>(obj);
-      v->min  = f[0];
-      v->max  = f[1];
-      return true;
-    };
-    return p;
-  }();
-  return &info;
-}
-
-const PropInfo* PropInfoOf<Rect>::get() {
-  static const PropInfo info = [] {
-    PropInfo p;
-    p.set_id("Rect");
-    p.klass = PropKlass::Trivial;
-    p.size  = sizeof(Rect);
-    p.align = alignof(Rect);
-    p.to_json = [](const void* obj) -> std::string {
-      const auto& v = *reinterpret_cast<const Rect*>(obj);
-      float f[4]     = {v.x.min, v.x.max, v.y.min, v.y.max};
-      return detail::json_array_of_floats(f, 4);
-    };
-    p.from_json = [](void* obj, const std::string& text) -> bool {
-      float f[4];
-      detail::json_floats_from_array(text, f, 4);
-      auto* v  = reinterpret_cast<Rect*>(obj);
-      v->x.min = f[0];
-      v->x.max = f[1];
-      v->y.min = f[2];
-      v->y.max = f[3];
-      return true;
-    };
-    return p;
-  }();
-  return &info;
-}
-
-const PropInfo* PropInfoOf<Rect3D>::get() {
-  static const PropInfo info = [] {
-    PropInfo p;
-    p.set_id("Rect3D");
-    p.klass = PropKlass::Trivial;
-    p.size  = sizeof(Rect3D);
-    p.align = alignof(Rect3D);
-    p.to_json = [](const void* obj) -> std::string {
-      const auto& v = *reinterpret_cast<const Rect3D*>(obj);
-      float f[6]     = {v.x.min, v.x.max, v.y.min, v.y.max, v.z.min, v.z.max};
-      return detail::json_array_of_floats(f, 6);
-    };
-    p.from_json = [](void* obj, const std::string& text) -> bool {
-      float f[6];
-      detail::json_floats_from_array(text, f, 6);
-      auto* v  = reinterpret_cast<Rect3D*>(obj);
-      v->x.min = f[0];
-      v->x.max = f[1];
-      v->y.min = f[2];
-      v->y.max = f[3];
-      v->z.min = f[4];
-      v->z.max = f[5];
-      return true;
-    };
-    return p;
-  }();
-  return &info;
-}
-
-namespace detail {
-struct StrTraits {
-  using T = Str;
-  static const char* c_str(const T& v) { return v.c_str(); }
-  static size_t size(const T& v) { return v.size(); }
-  static void assign(T& v, const char* s, size_t n) { v = Str(s, n); }
-};
-struct PathTraits {
-  using T = Path;
-  static const char* c_str(const T& v) { return v.str().c_str(); }
-  static size_t size(const T& v) { return v.str().size(); }
-  static void assign(T& v, const char* s, size_t n) { v = Path(Str(s, n)); }
-};
-
-template <typename Traits> const PropInfo* make_string_like_propinfo(const char* id) {
-  using T = typename Traits::T;
-  static const PropInfo info = [id] {
-    PropInfo p;
-    p.set_id(id);
-    p.klass         = PropKlass::Indirect;
-    p.size          = sizeof(T);
-    p.align         = alignof(T);
-    p.copy_ctor     = [](void* dst, const void* src) { new(dst) T(*reinterpret_cast<const T*>(src)); };
-    p.dtor          = [](void* obj) { reinterpret_cast<T*>(obj)->~T(); };
-    p.default_ctor  = [](void* obj) { new(obj) T(); };
-    p.element_type  = prop_info_of<uint8_t>(); // 文字列本体をuint8_tのコンテナとして表現し一括memcpy経路に乗せる
-    p.seq_size      = [](const void* obj) -> size_t { return Traits::size(*reinterpret_cast<const T*>(obj)); };
-    p.seq_data      = [](const void* obj) -> const void* { return reinterpret_cast<const void*>(Traits::c_str(*reinterpret_cast<const T*>(obj))); };
-    p.seq_assign_raw = [](void* obj, const void* src, size_t n) { Traits::assign(*reinterpret_cast<T*>(obj), reinterpret_cast<const char*>(src), n); };
-    p.to_json       = [](const void* obj) -> std::string { return json_quote(Traits::c_str(*reinterpret_cast<const T*>(obj))); };
-    p.from_json     = [](void* obj, const std::string& text) -> bool {
-      std::string s = json_unquote(json_trim(text));
-      new(obj) T();
-      Traits::assign(*reinterpret_cast<T*>(obj), s.data(), s.size());
-      return true;
-    };
-    return p;
-  }();
-  return &info;
-}
-} // namespace detail
-
-const PropInfo* PropInfoOf<Str>::get() { return detail::make_string_like_propinfo<detail::StrTraits>("Str"); }
-const PropInfo* PropInfoOf<Path>::get() { return detail::make_string_like_propinfo<detail::PathTraits>("Path"); }
-
-const PropInfo* PropInfoOf<std::vector<uint8_t>>::get() {
-  static const PropInfo info = [] {
-    PropInfo p;
-    p.set_id("Binary");
-    p.klass       = PropKlass::Indirect;
-    p.size        = sizeof(std::vector<uint8_t>);
-    p.align       = alignof(std::vector<uint8_t>);
-    p.copy_ctor   = [](void* dst, const void* src) { new(dst) std::vector<uint8_t>(*reinterpret_cast<const std::vector<uint8_t>*>(src)); };
-    p.dtor        = [](void* obj) { reinterpret_cast<std::vector<uint8_t>*>(obj)->~vector(); };
-    p.default_ctor = [](void* obj) { new(obj) std::vector<uint8_t>(); };
-    p.element_type = prop_info_of<uint8_t>();
-    p.seq_size     = [](const void* obj) -> size_t { return reinterpret_cast<const std::vector<uint8_t>*>(obj)->size(); };
-    p.seq_data     = [](const void* obj) -> const void* { return reinterpret_cast<const void*>(reinterpret_cast<const std::vector<uint8_t>*>(obj)->data()); };
-    p.seq_assign_raw = [](void* obj, const void* src, size_t n) {
-      auto* v = reinterpret_cast<std::vector<uint8_t>*>(obj);
-      v->resize(n);
-      if(n) std::memcpy(v->data(), src, n);
-    };
-    p.to_json = [](const void* obj) -> std::string {
-      const auto* v   = reinterpret_cast<const std::vector<uint8_t>*>(obj);
-      std::string out = "[";
-      for(size_t i = 0; i < v->size(); i++) {
-        if(i) out += ",";
-        out += std::to_string((*v)[i]);
-      }
-      out += "]";
-      return out;
-    };
-    p.from_json = [](void* obj, const std::string& text) -> bool {
-      auto* v = new(obj) std::vector<uint8_t>();
-      for(const auto& part : detail::json_split_top_level(text)) v->push_back(static_cast<uint8_t>(std::stoi(part)));
-      return true;
-    };
-    return p;
-  }();
-  return &info;
-}
-
-const PropInfo* prop_info_of_ref_slot() {
-  static const PropInfo info = [] {
-    PropInfo p;
-    p.set_id("Ref");
-    p.klass = PropKlass::Trivial;
-    p.size  = sizeof(void*);
-    p.align = alignof(void*);
-    return p;
-  }();
-  return &info;
-}
-
-const PropInfo* prop_info_of_ref_list_slot() {
-  static const PropInfo info = [] {
-    PropInfo p;
-    p.set_id("RefList");
-    p.klass        = PropKlass::Indirect;
-    p.size         = sizeof(std::vector<void*>);
-    p.align        = alignof(std::vector<void*>);
-    p.copy_ctor    = [](void* dst, const void* src) { new(dst) std::vector<void*>(*reinterpret_cast<const std::vector<void*>*>(src)); };
-    p.dtor         = [](void* obj) { reinterpret_cast<std::vector<void*>*>(obj)->~vector(); };
-    p.default_ctor = [](void* obj) { new(obj) std::vector<void*>(); };
-    return p;
-  }();
-  return &info;
-}
-
-PropInfoRegistry& PropInfoRegistry::instance() {
-  static PropInfoRegistry inst;
-  return inst;
-}
-void PropInfoRegistry::register_type(const std::string& name, const PropInfo* info) { types_.put(name, info); }
-const PropInfo* PropInfoRegistry::find(const std::string& name) const {
-  auto it = types_.find(name);
-  if(it == types_.end()) return nullptr;
-  return it->second;
-}
-
-namespace detail {
-void register_prop_info_auto(const PropInfo* info) { PropInfoRegistry::instance().register_type(info->id, info); }
-} // namespace detail
-
-CustomSlot::~CustomSlot() { destroy(); }
-CustomSlot::CustomSlot(const CustomSlot& other) { copy_from(other); }
-CustomSlot& CustomSlot::operator=(const CustomSlot& other) {
-  if(this != &other) {
-    destroy();
-    copy_from(other);
-  }
-  return *this;
-}
-
-CustomSlot CustomSlot::make_from_json(const PropInfo* type_info, const std::string& json_text) {
-  CustomSlot slot;
-  slot.info = type_info;
-  if(!type_info->from_json) throw std::logic_error(std::string("CustomSlot: type has no from_json registered: ") + type_info->id);
-  slot.ptr = std::malloc(type_info->size);
-  if(!slot.ptr) throw std::bad_alloc();
-  if(!type_info->from_json(slot.ptr, json_text)) {
-    std::free(slot.ptr);
-    slot.ptr = nullptr;
-    throw std::logic_error(std::string("CustomSlot: from_json failed for type: ") + type_info->id);
-  }
-  return slot;
-}
-
-std::string CustomSlot::to_json() const {
-  if(!info || !info->to_json) throw std::logic_error("CustomSlot: type has no to_json registered");
-  return info->to_json(ptr);
-}
-
-void CustomSlot::destroy() {
-  if(ptr) {
-    if(info && info->dtor) info->dtor(ptr);
-    std::free(ptr);
-    ptr = nullptr;
-  }
-}
-
-void CustomSlot::copy_from(const CustomSlot& other) {
-  info = other.info;
-  if(other.ptr) {
-    if(!info) throw std::logic_error("CustomSlot: copy from slot with null info");
-    ptr = std::malloc(info->size);
-    if(!ptr) throw std::bad_alloc();
-    if(info->copy_ctor) {
-      info->copy_ctor(ptr, other.ptr);
-    } else {
-      std::memcpy(ptr, other.ptr, info->size);
-    }
-  } else {
-    ptr = nullptr;
-  }
-}
-
-const PropInfo* PropInfoOf<CustomSlot>::get() {
-  static const PropInfo info = [] {
-    PropInfo p;
-    p.set_id("CustomSlot");
-    p.klass        = PropKlass::Dynamic;
-    p.size         = sizeof(CustomSlot);
-    p.align        = alignof(CustomSlot);
-    p.copy_ctor    = [](void* dst, const void* src) { new(dst) CustomSlot(*reinterpret_cast<const CustomSlot*>(src)); };
-    p.dtor         = [](void* obj) { reinterpret_cast<CustomSlot*>(obj)->~CustomSlot(); };
-    p.default_ctor = [](void* obj) { new(obj) CustomSlot(); };
-    // CustomSlot自身のto_json()は中身の値のjsonのみを返すため、中身の実際の型名(復元に必要)も併せて包む。
-    p.to_json = [](const void* obj) -> std::string {
-      const auto* slot = reinterpret_cast<const CustomSlot*>(obj);
-      return "{" + detail::json_quote("custom_type") + ":" + detail::json_quote(slot->info ? slot->info->id : "") + "," + detail::json_quote("value") + ":" + slot->to_json() + "}";
-    };
-    p.from_json = [](void* obj, const std::string& text) -> bool {
-      std::string custom_type, value;
-      for(const auto& part : detail::json_split_top_level(text)) {
-        std::string k, v;
-        if(!detail::json_split_kv(part, k, v)) continue;
-        if(k == "custom_type") custom_type = detail::json_unquote(v);
-        else if(k == "value") value = v;
-      }
-      const PropInfo* inner_type = PropInfoRegistry::instance().find(custom_type);
-      if(!inner_type) return false;
-      CustomSlot slot = CustomSlot::make_from_json(inner_type, value);
-      new(obj) CustomSlot(std::move(slot));
-      return true;
-    };
-    return p;
-  }();
-  return &info;
-}
-
-// prop_info_of<Prop>()のto_json/from_jsonはprop_io.hppがprop_dump_json/prop_load_json定義後にconst_castで遅延バインドする。
-const PropInfo* PropInfoOf<Prop>::get() {
-  static const PropInfo info = [] {
-    PropInfo p;
-    p.set_id("Prop");
-    p.klass        = PropKlass::Indirect;
-    p.size         = sizeof(Prop);
-    p.align        = alignof(Prop);
-    p.copy_ctor    = [](void* dst, const void* src) { new(dst) Prop(*reinterpret_cast<const Prop*>(src)); };
-    p.dtor         = [](void* obj) { reinterpret_cast<Prop*>(obj)->~Prop(); };
-    p.default_ctor = [](void* obj) { new(obj) Prop(); };
-    return p;
-  }();
-  return &info;
-}
-
-} // namespace cutil
-
+#include <cutil/prop.cpp>
 #endif // CUTIL_IMPLEMENTATION

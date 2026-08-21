@@ -9,7 +9,7 @@
 
 #include <cutil/prop.hpp>
 
-// cutil::prop_dump_binary/prop_load_binary: PropKlass(Trivial/Indirect/Dynamic)に基づく新バイナリフォーマット(Issue #21)。
+// cutil::prop_dump_binary/prop_load_binary: PropClass(Trivial/Indirect/Dynamic)に基づく新バイナリフォーマット(Issue #21)。
 //
 // 型ごとに1回だけ[SchemaSection]へスキーマを記録.
 // [EntryTable]は「名前 + schema参照index + offset/size」のみの軽量レコードにすることでこれを解消する。
@@ -69,7 +69,7 @@ inline void write_value_binary(const PropInfo* type, const void* obj, std::vecto
   if(!type->fields.empty()) {
     for(const auto& f : type->fields) {
       const auto* fptr = reinterpret_cast<const uint8_t*>(obj) + f.offset;
-      if(f.type->klass == PropKlass::Trivial) {
+      if(f.type->klass == PropClass::Trivial) {
         append_bytes(blob_out, fptr, f.type->size);
       } else {
         write_value_binary(f.type, fptr, blob_out);
@@ -80,7 +80,7 @@ inline void write_value_binary(const PropInfo* type, const void* obj, std::vecto
   if(type->element_type) {
     size_t n = type->seq_size(obj);
     append_u32(blob_out, static_cast<uint32_t>(n));
-    if(type->element_type->klass == PropKlass::Trivial) {
+    if(type->element_type->klass == PropClass::Trivial) {
       if(n) append_bytes(blob_out, type->seq_data(obj), n * type->element_type->size);
     } else {
       for(size_t i = 0; i < n; i++) write_value_binary(type->element_type, type->seq_at(obj, i), blob_out);
@@ -100,7 +100,7 @@ inline size_t read_value_binary(const PropInfo* type, void* obj, const uint8_t* 
     else std::memset(obj, 0, type->size);
     for(const auto& f : type->fields) {
       auto* fptr = reinterpret_cast<uint8_t*>(obj) + f.offset;
-      if(f.type->klass == PropKlass::Trivial) {
+      if(f.type->klass == PropClass::Trivial) {
         std::memcpy(fptr, blob + offset, f.type->size);
         offset += f.type->size;
       } else {
@@ -116,7 +116,7 @@ inline size_t read_value_binary(const PropInfo* type, void* obj, const uint8_t* 
     offset += sizeof(n);
     if(type->default_ctor) type->default_ctor(obj);
     else std::memset(obj, 0, type->size);
-    if(type->element_type->klass == PropKlass::Trivial) {
+    if(type->element_type->klass == PropClass::Trivial) {
       type->seq_assign_raw(obj, blob + offset, n);
       offset += static_cast<size_t>(n) * type->element_type->size;
     } else {
@@ -179,7 +179,7 @@ inline bool prop_load_json(Prop& prop, const std::string& text) {
     std::vector<uint8_t> storage(type->size);
     if(!type->from_json(storage.data(), value_json)) continue;
 
-    if(type->klass == PropKlass::Trivial) {
+    if(type->klass == PropClass::Trivial) {
       prop.set_raw_pod_by_info(field_name.c_str(), type, storage.data());
     } else {
       prop.adopt_raw_by_info(field_name.c_str(), type, storage.data());
@@ -230,7 +230,7 @@ inline bool prop_dump_binary(const Prop& prop, std::vector<uint8_t>& out) {
     const auto& f       = fields[i];
     const uint8_t* fptr = base + f.offset;
     data_offsets[i]     = static_cast<uint32_t>(data_block.size());
-    if(f.type->klass == PropKlass::Trivial) {
+    if(f.type->klass == PropClass::Trivial) {
       detail::append_bytes(data_block, fptr, f.type->size);
     } else {
       uint32_t blob_offset = static_cast<uint32_t>(blob_block.size());
@@ -271,7 +271,7 @@ inline bool prop_dump_binary(const Prop& prop, std::vector<uint8_t>& out) {
     std::strncpy(ve.name, fields[i].name, sizeof(ve.name) - 1);
     ve.schema_index = field_schema_index[i];
     ve.data_offset  = data_offsets[i];
-    ve.data_size    = fields[i].type->klass == PropKlass::Trivial ? static_cast<uint32_t>(fields[i].type->size) : 8u; // Indirect/Dynamicは{blob_offset,blob_size}固定8バイト
+    ve.data_size    = fields[i].type->klass == PropClass::Trivial ? static_cast<uint32_t>(fields[i].type->size) : 8u; // Indirect/Dynamicは{blob_offset,blob_size}固定8バイト
     detail::append_bytes(out, &ve, sizeof(ve));
   }
 
@@ -339,7 +339,7 @@ inline bool prop_load_binary(Prop& prop, const std::vector<uint8_t>& bytes, cons
     if(live_type->version == file_schema.entry.version) {
       // fast path: 現行スキーマとバイト完全互換なのでそのまま読み込む
       std::vector<uint8_t> storage(live_type->size);
-      if(live_type->klass == PropKlass::Trivial) {
+      if(live_type->klass == PropClass::Trivial) {
         std::memcpy(storage.data(), bytes.data() + entry_data_offset, live_type->size);
       } else {
         uint32_t blob_offset = 0, blob_len = 0;
@@ -348,12 +348,12 @@ inline bool prop_load_binary(Prop& prop, const std::vector<uint8_t>& bytes, cons
         if(blob_offset + blob_len > blob_size) return do_fallback();
         detail::read_value_binary(live_type, storage.data(), blob, blob_offset);
       }
-      if(live_type->klass == PropKlass::Trivial) {
+      if(live_type->klass == PropClass::Trivial) {
         prop.set_raw_pod_by_info(ve.name, live_type, storage.data());
       } else {
         prop.adopt_raw_by_info(ve.name, live_type, storage.data());
       }
-    } else if(live_type->klass == PropKlass::Trivial) {
+    } else if(live_type->klass == PropClass::Trivial) {
       // Trivial型はversion不一致でもバイナリレイアウト(size)が変わっていなければそのままmemcpyで復元できる。
       if(file_schema.entry.size != live_type->size) continue;
       std::vector<uint8_t> storage(live_type->size);
@@ -375,7 +375,7 @@ inline bool prop_load_binary(Prop& prop, const std::vector<uint8_t>& bytes, cons
 
       for(const auto& old_f : file_schema.fields) {
         const PropInfo::Field* cur_f = live_type->find_field(old_f.name);
-        if(!cur_f || cur_f->type->klass != PropKlass::Trivial) continue;
+        if(!cur_f || cur_f->type->klass != PropClass::Trivial) continue;
         if(std::strncmp(cur_f->type->id, old_f.type_id, sizeof(old_f.type_id)) != 0) continue;
         if(old_f.offset + old_f.size > blob_len) continue;
         std::memcpy(storage.data() + cur_f->offset, old_blob + old_f.offset, old_f.size);
