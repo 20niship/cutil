@@ -3,9 +3,9 @@
 
 using cutil::align_up;
 using cutil::has_flag;
+using cutil::PropClass;
 using cutil::PropFlags;
 using cutil::PropInfo;
-using cutil::PropClass;
 using cutil::validate;
 using Field = cutil::PropInfo::Field;
 
@@ -33,9 +33,9 @@ TEST_SUITE("PropInfo - Basic Operations") {
 
   TEST_CASE("PropInfo::find_field by name (linear search)") {
     PropInfo info = {
-        {"a", 0, cutil::prop_info_of<int32_t>()},
-        {"b", 4, cutil::prop_info_of<float>()},
-        {"c", 8, cutil::prop_info_of<cutil::Str>()},
+      {"a", 0, cutil::prop_info_of<int32_t>()},
+      {"b", 4, cutil::prop_info_of<float>()},
+      {"c", 8, cutil::prop_info_of<cutil::Str>()},
     };
 
     const Field* found = info.find_field("b");

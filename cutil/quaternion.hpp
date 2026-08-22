@@ -53,8 +53,7 @@ template <typename T = float> struct Quat {
     const double cr = std::cos(hr), sr = std::sin(hr);
     const double cp = std::cos(hp), sp = std::sin(hp);
     const double cy = std::cos(hy), sy = std::sin(hy);
-    return Quat(static_cast<T>(sr * cp * cy - cr * sp * sy), static_cast<T>(cr * sp * cy + sr * cp * sy), static_cast<T>(cr * cp * sy - sr * sp * cy),
-                static_cast<T>(cr * cp * cy + sr * sp * sy));
+    return Quat(static_cast<T>(sr * cp * cy - cr * sp * sy), static_cast<T>(cr * sp * cy + sr * cp * sy), static_cast<T>(cr * cp * sy - sr * sp * cy), static_cast<T>(cr * cp * cy + sr * sp * sy));
   }
 
   static Quat from_mat3(const Mat<3, 3, T>& m) {
@@ -97,10 +96,7 @@ template <typename T = float> struct Quat {
   constexpr Quat operator/(T s) const { return Quat(x / s, y / s, z / s, w / s); }
 
   // Hamilton product: composes rotations. (a * b) applied to a vector rotates by b first, then a.
-  constexpr Quat operator*(const Quat& o) const {
-    return Quat(w * o.x + x * o.w + y * o.z - z * o.y, w * o.y - x * o.z + y * o.w + z * o.x, w * o.z + x * o.y - y * o.x + z * o.w,
-                w * o.w - x * o.x - y * o.y - z * o.z);
-  }
+  constexpr Quat operator*(const Quat& o) const { return Quat(w * o.x + x * o.w + y * o.z - z * o.y, w * o.y - x * o.z + y * o.w + z * o.x, w * o.z + x * o.y - y * o.x + z * o.w, w * o.w - x * o.x - y * o.y - z * o.z); }
 
   // Rotate a vector by this quaternion (assumed to be unit-length)
   NVec<3, T> operator*(const NVec<3, T>& v) const {
@@ -174,12 +170,12 @@ template <typename T = float> struct Quat {
     const double cosr_cosp = 1.0 - 2.0 * (static_cast<double>(x) * x + static_cast<double>(y) * y);
     const double roll      = std::atan2(sinr_cosp, cosr_cosp);
 
-    const double sinp   = 2.0 * (static_cast<double>(w) * y - static_cast<double>(z) * x);
-    const double pitch  = std::abs(sinp) >= 1.0 ? std::copysign(1.5707963267948966, sinp) : std::asin(sinp);
+    const double sinp  = 2.0 * (static_cast<double>(w) * y - static_cast<double>(z) * x);
+    const double pitch = std::abs(sinp) >= 1.0 ? std::copysign(1.5707963267948966, sinp) : std::asin(sinp);
 
     const double siny_cosp = 2.0 * (static_cast<double>(w) * z + static_cast<double>(x) * y);
     const double cosy_cosp = 1.0 - 2.0 * (static_cast<double>(y) * y + static_cast<double>(z) * z);
-    const double yaw        = std::atan2(siny_cosp, cosy_cosp);
+    const double yaw       = std::atan2(siny_cosp, cosy_cosp);
 
     return NVec<3, T>(static_cast<T>(roll), static_cast<T>(pitch), static_cast<T>(yaw));
   }
@@ -210,7 +206,7 @@ template <typename T = float> struct Quat {
 
   // Spherical linear interpolation to `to`, taking the shorter arc
   Quat slerp(const Quat& to, double t) const {
-    double cosom       = static_cast<double>(dot(to));
+    double cosom      = static_cast<double>(dot(to));
     Quat to_corrected = to;
     if(cosom < 0.0) {
       cosom        = -cosom;
@@ -226,13 +222,10 @@ template <typename T = float> struct Quat {
       scale0 = 1.0 - t;
       scale1 = t;
     }
-    return Quat(static_cast<T>(scale0 * x + scale1 * to_corrected.x), static_cast<T>(scale0 * y + scale1 * to_corrected.y),
-                static_cast<T>(scale0 * z + scale1 * to_corrected.z), static_cast<T>(scale0 * w + scale1 * to_corrected.w));
+    return Quat(static_cast<T>(scale0 * x + scale1 * to_corrected.x), static_cast<T>(scale0 * y + scale1 * to_corrected.y), static_cast<T>(scale0 * z + scale1 * to_corrected.z), static_cast<T>(scale0 * w + scale1 * to_corrected.w));
   }
 
-  std::string str() const {
-    return "Quat(" + std::to_string(x) + ", " + std::to_string(y) + ", " + std::to_string(z) + ", " + std::to_string(w) + ")";
-  }
+  std::string str() const { return "Quat(" + std::to_string(x) + ", " + std::to_string(y) + ", " + std::to_string(z) + ", " + std::to_string(w) + ")"; }
 };
 
 // ---- Non-member operators ---------------------------------------------------

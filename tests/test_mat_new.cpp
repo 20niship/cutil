@@ -6,19 +6,16 @@ using namespace cutil;
 
 // Helper: build a matrix from row-major initializer list (for readability in tests)
 // Internal storage is column-major, so this is a convenience wrapper
-template <unsigned int R, unsigned int C, typename T = float>
-Mat<R, C, T> make_mat(std::initializer_list<T> row_major) {
+template <unsigned int R, unsigned int C, typename T = float> Mat<R, C, T> make_mat(std::initializer_list<T> row_major) {
   auto it = row_major.begin();
   Mat<R, C, T> m;
   for(unsigned int r = 0; r < R; r++)
-    for(unsigned int c = 0; c < C; c++)
-      m(r, c) = *it++;
+    for(unsigned int c = 0; c < C; c++) m(r, c) = *it++;
   return m;
 }
 
 // Helper: check Mat<N,N> ~ identity within tolerance
-template <unsigned int N, typename T>
-bool is_identity(const Mat<N, N, T>& m, double tol = 1e-4) {
+template <unsigned int N, typename T> bool is_identity(const Mat<N, N, T>& m, double tol = 1e-4) {
   for(unsigned int r = 0; r < N; r++)
     for(unsigned int c = 0; c < N; c++) {
       double expected = (r == c) ? 1.0 : 0.0;
@@ -28,8 +25,7 @@ bool is_identity(const Mat<N, N, T>& m, double tol = 1e-4) {
 }
 
 // Helper: check two matrices are element-wise close
-template <unsigned int R, unsigned int C, typename T>
-bool mat_approx_eq(const Mat<R, C, T>& a, const Mat<R, C, T>& b, double tol = 1e-4) {
+template <unsigned int R, unsigned int C, typename T> bool mat_approx_eq(const Mat<R, C, T>& a, const Mat<R, C, T>& b, double tol = 1e-4) {
   for(unsigned int i = 0; i < R * C; i++)
     if(std::abs(static_cast<double>(a[i]) - static_cast<double>(b[i])) > tol) return false;
   return true;
@@ -45,9 +41,13 @@ TEST_SUITE("Mat - Constructors") {
 
   TEST_CASE("Identity factory: 3x3") {
     Mat3f m = Mat3f::identity();
-    CHECK(m(0, 0) == 1.0f); CHECK(m(1, 1) == 1.0f); CHECK(m(2, 2) == 1.0f);
-    CHECK(m(0, 1) == 0.0f); CHECK(m(0, 2) == 0.0f);
-    CHECK(m(1, 0) == 0.0f); CHECK(m(2, 0) == 0.0f);
+    CHECK(m(0, 0) == 1.0f);
+    CHECK(m(1, 1) == 1.0f);
+    CHECK(m(2, 2) == 1.0f);
+    CHECK(m(0, 1) == 0.0f);
+    CHECK(m(0, 2) == 0.0f);
+    CHECK(m(1, 0) == 0.0f);
+    CHECK(m(2, 0) == 0.0f);
   }
 
   TEST_CASE("Identity factory: 4x4") {
@@ -67,8 +67,8 @@ TEST_SUITE("Mat - Constructors") {
 
   TEST_CASE("Copy constructor") {
     Mat3f a = Mat3f::identity();
-    a(0, 2)  = 7.0f;
-    Mat3f b  = a;
+    a(0, 2) = 7.0f;
+    Mat3f b = a;
     CHECK(b(0, 2) == 7.0f);
     b(0, 2) = 99.0f;
     CHECK(a(0, 2) == 7.0f); // independent copy
@@ -90,17 +90,17 @@ TEST_SUITE("Mat - Element Access") {
   TEST_CASE("(row, col) round-trip for 3x3") {
     Mat3f m;
     for(unsigned int r = 0; r < 3; r++)
-      for(unsigned int c = 0; c < 3; c++)
-        m(r, c) = static_cast<float>(r * 3 + c + 1);
+      for(unsigned int c = 0; c < 3; c++) m(r, c) = static_cast<float>(r * 3 + c + 1);
     for(unsigned int r = 0; r < 3; r++)
-      for(unsigned int c = 0; c < 3; c++)
-        CHECK(m(r, c) == static_cast<float>(r * 3 + c + 1));
+      for(unsigned int c = 0; c < 3; c++) CHECK(m(r, c) == static_cast<float>(r * 3 + c + 1));
   }
 
   TEST_CASE("Column-major layout") {
     Mat<2, 2, float> m;
-    m(0, 0) = 1; m(1, 0) = 2; // col 0
-    m(0, 1) = 3; m(1, 1) = 4; // col 1
+    m(0, 0) = 1;
+    m(1, 0) = 2; // col 0
+    m(0, 1) = 3;
+    m(1, 1) = 4; // col 1
     // column-major: data[col*Rows+row]  →  [1, 2, 3, 4]
     CHECK(m[0] == 1.0f);
     CHECK(m[1] == 2.0f);
@@ -121,9 +121,13 @@ TEST_SUITE("Mat - Element Access") {
   TEST_CASE("set_col / set_row round-trip") {
     Mat3f m = Mat3f::zeros();
     m.set_col(0, Vec3f(1, 2, 3));
-    CHECK(m(0, 0) == 1); CHECK(m(1, 0) == 2); CHECK(m(2, 0) == 3);
+    CHECK(m(0, 0) == 1);
+    CHECK(m(1, 0) == 2);
+    CHECK(m(2, 0) == 3);
     m.set_row(1, Vec3f(10, 20, 30));
-    CHECK(m(1, 0) == 10); CHECK(m(1, 1) == 20); CHECK(m(1, 2) == 30);
+    CHECK(m(1, 0) == 10);
+    CHECK(m(1, 1) == 20);
+    CHECK(m(1, 2) == 30);
   }
 }
 
@@ -141,7 +145,7 @@ TEST_SUITE("Mat - Arithmetic") {
   }
 
   TEST_CASE("Scalar multiply/divide") {
-    Mat3f m = Mat3f::identity();
+    Mat3f m  = Mat3f::identity();
     Mat3f m2 = m * 5.0f;
     CHECK(m2(0, 0) == 5.0f);
     CHECK(m2(0, 1) == 0.0f);
@@ -205,7 +209,9 @@ TEST_SUITE("Mat - Matrix Multiplication") {
   TEST_CASE("3x3 known product") {
     // A = diag(1,2,3), B = all-twos → C(i,j) = 2*A(i,i)
     Mat3f a;
-    a(0, 0) = 1; a(1, 1) = 2; a(2, 2) = 3;
+    a(0, 0) = 1;
+    a(1, 1) = 2;
+    a(2, 2) = 3;
     Mat3f b = Mat3f::ones();
     Mat3f c = a * b;
     // row 0 of result: 1*[1,1,1] = [1,1,1]
@@ -221,9 +227,15 @@ TEST_SUITE("Mat - Matrix Multiplication") {
 
   TEST_CASE("4x4 known product") {
     Mat4f a;
-    a(0, 0) = 2; a(1, 1) = 3; a(2, 2) = 4; a(3, 3) = 5;
+    a(0, 0) = 2;
+    a(1, 1) = 3;
+    a(2, 2) = 4;
+    a(3, 3) = 5;
     Mat4f b;
-    b(0, 0) = 10; b(1, 1) = 10; b(2, 2) = 10; b(3, 3) = 10;
+    b(0, 0) = 10;
+    b(1, 1) = 10;
+    b(2, 2) = 10;
+    b(3, 3) = 10;
     Mat4f c = a * b;
     CHECK(doctest::Approx(c(0, 0)) == 20.0f);
     CHECK(doctest::Approx(c(1, 1)) == 30.0f);
@@ -233,18 +245,18 @@ TEST_SUITE("Mat - Matrix Multiplication") {
   }
 
   TEST_CASE("Associativity: (A*B)*C == A*(B*C) (3x3)") {
-    auto a = make_mat<3, 3, float>({1, 2, 0, 0, 3, 1, 0, 0, 4});
-    auto b = make_mat<3, 3, float>({2, 0, 1, 1, 3, 0, 0, 2, 1});
-    auto c = make_mat<3, 3, float>({0, 1, 2, 3, 0, 1, 1, 2, 0});
+    auto a    = make_mat<3, 3, float>({1, 2, 0, 0, 3, 1, 0, 0, 4});
+    auto b    = make_mat<3, 3, float>({2, 0, 1, 1, 3, 0, 0, 2, 1});
+    auto c    = make_mat<3, 3, float>({0, 1, 2, 3, 0, 1, 1, 2, 0});
     Mat3f lhs = (a * b) * c;
     Mat3f rhs = a * (b * c);
     CHECK(mat_approx_eq(lhs, rhs, 1e-4f));
   }
 
   TEST_CASE("Associativity: 4x4 (chained transforms)") {
-    Mat4f tx = mat4_translation<float>(Vec3f(1, 2, 3));
-    Mat4f sc = mat4_scale<float>(Vec3f(2, 2, 2));
-    Mat4f rx = mat4_rotation_x<float>(0.5f);
+    Mat4f tx  = mat4_translation<float>(Vec3f(1, 2, 3));
+    Mat4f sc  = mat4_scale<float>(Vec3f(2, 2, 2));
+    Mat4f rx  = mat4_rotation_x<float>(0.5f);
     Mat4f lhs = (tx * sc) * rx;
     Mat4f rhs = tx * (sc * rx);
     CHECK(mat_approx_eq(lhs, rhs, 1e-4f));
@@ -254,10 +266,12 @@ TEST_SUITE("Mat - Matrix Multiplication") {
     // A (2x3): [1 2 3; 4 5 6]
     // B (3x4): [1 0 0 0; 0 1 0 0; 0 0 1 0]  = 3x4 pseudo-identity
     // A*B = A with an extra zero column
-    auto a  = make_mat<2, 3, float>({1, 2, 3, 4, 5, 6});
+    auto a = make_mat<2, 3, float>({1, 2, 3, 4, 5, 6});
     Mat<3, 4, float> b;
-    b(0, 0) = 1; b(1, 1) = 1; b(2, 2) = 1;
-    auto c = a * b;
+    b(0, 0) = 1;
+    b(1, 1) = 1;
+    b(2, 2) = 1;
+    auto c  = a * b;
     static_assert(std::is_same<decltype(c), Mat<2, 4, float>>::value, "dim check");
     CHECK(doctest::Approx(c(0, 0)) == 1.0f);
     CHECK(doctest::Approx(c(0, 1)) == 2.0f);
@@ -294,10 +308,14 @@ TEST_SUITE("Mat - Matrix-Vector Multiplication") {
 
   TEST_CASE("Diagonal scale * vec") {
     Mat3f m;
-    m(0, 0) = 2; m(1, 1) = 3; m(2, 2) = 4;
+    m(0, 0) = 2;
+    m(1, 1) = 3;
+    m(2, 2) = 4;
     Vec3f v(1, 1, 1);
     Vec3f r = m * v;
-    CHECK(r[0] == 2.0f); CHECK(r[1] == 3.0f); CHECK(r[2] == 4.0f);
+    CHECK(r[0] == 2.0f);
+    CHECK(r[1] == 3.0f);
+    CHECK(r[2] == 4.0f);
   }
 
   TEST_CASE("Translation via 4x4 * vec4") {
@@ -360,17 +378,11 @@ TEST_SUITE("Mat - Matrix-Vector Multiplication") {
 // ===== Trace ================================================================
 
 TEST_SUITE("Mat - Trace") {
-  TEST_CASE("Trace of 3x3 identity = 3") {
-    CHECK(Mat3f::identity().trace() == 3.0f);
-  }
+  TEST_CASE("Trace of 3x3 identity = 3") { CHECK(Mat3f::identity().trace() == 3.0f); }
 
-  TEST_CASE("Trace of 4x4 identity = 4") {
-    CHECK(Mat4f::identity().trace() == 4.0f);
-  }
+  TEST_CASE("Trace of 4x4 identity = 4") { CHECK(Mat4f::identity().trace() == 4.0f); }
 
-  TEST_CASE("Trace of zeros = 0") {
-    CHECK(Mat4f::zeros().trace() == 0.0f);
-  }
+  TEST_CASE("Trace of zeros = 0") { CHECK(Mat4f::zeros().trace() == 0.0f); }
 
   TEST_CASE("Trace of known 3x3") {
     // [[1,2,3],[4,5,6],[7,8,9]] → trace = 1+5+9 = 15
@@ -384,17 +396,17 @@ TEST_SUITE("Mat - Trace") {
   }
 
   TEST_CASE("Linearity: trace(A + B) = trace(A) + trace(B)") {
-    auto a = make_mat<3, 3, float>({1, 2, 3, 4, 5, 6, 7, 8, 9});
-    auto b = make_mat<3, 3, float>({9, 8, 7, 6, 5, 4, 3, 2, 1});
-    float ta = a.trace();
-    float tb = b.trace();
+    auto a    = make_mat<3, 3, float>({1, 2, 3, 4, 5, 6, 7, 8, 9});
+    auto b    = make_mat<3, 3, float>({9, 8, 7, 6, 5, 4, 3, 2, 1});
+    float ta  = a.trace();
+    float tb  = b.trace();
     float tab = (a + b).trace();
     CHECK(doctest::Approx(tab) == ta + tb);
   }
 
   TEST_CASE("Cyclic property: trace(A*B) = trace(B*A) (3x3)") {
-    auto a = make_mat<3, 3, float>({1, 2, 3, 4, 5, 6, 7, 8, 10});
-    auto b = make_mat<3, 3, float>({2, 0, 1, 1, 3, 0, 0, 2, 1});
+    auto a    = make_mat<3, 3, float>({1, 2, 3, 4, 5, 6, 7, 8, 10});
+    auto b    = make_mat<3, 3, float>({2, 0, 1, 1, 3, 0, 0, 2, 1});
     float tab = (a * b).trace();
     float tba = (b * a).trace();
     CHECK(doctest::Approx(tab).epsilon(1e-3) == tba);
@@ -437,13 +449,9 @@ TEST_SUITE("Mat - Determinant") {
     CHECK(doctest::Approx(m.det()).epsilon(1e-5) == 0.0f);
   }
 
-  TEST_CASE("det of 2x2 zero matrix = 0") {
-    CHECK(doctest::Approx(Mat<2, 2, float>::zeros().det()) == 0.0f);
-  }
+  TEST_CASE("det of 2x2 zero matrix = 0") { CHECK(doctest::Approx(Mat<2, 2, float>::zeros().det()) == 0.0f); }
 
-  TEST_CASE("det of 2x2 identity = 1") {
-    CHECK(doctest::Approx(Mat<2, 2, float>::identity().det()) == 1.0f);
-  }
+  TEST_CASE("det of 2x2 identity = 1") { CHECK(doctest::Approx(Mat<2, 2, float>::identity().det()) == 1.0f); }
 
   TEST_CASE("det of 3x3 = 22") {
     // [1 2 3; 0 4 5; 1 0 6]
@@ -478,13 +486,14 @@ TEST_SUITE("Mat - Determinant") {
     CHECK(doctest::Approx(m.det()).epsilon(1e-3) == 24.0f);
   }
 
-  TEST_CASE("det of 4x4 identity = 1") {
-    CHECK(doctest::Approx(Mat4f::identity().det()) == 1.0f);
-  }
+  TEST_CASE("det of 4x4 identity = 1") { CHECK(doctest::Approx(Mat4f::identity().det()) == 1.0f); }
 
   TEST_CASE("det of 4x4 diagonal = product of diagonal") {
     Mat4f m;
-    m(0, 0) = 2; m(1, 1) = 3; m(2, 2) = 4; m(3, 3) = 5;
+    m(0, 0) = 2;
+    m(1, 1) = 3;
+    m(2, 2) = 4;
+    m(3, 3) = 5;
     CHECK(doctest::Approx(m.det()).epsilon(1e-3) == 120.0f); // 2*3*4*5
   }
 
@@ -500,8 +509,8 @@ TEST_SUITE("Mat - Determinant") {
   }
 
   TEST_CASE("det(A * B) = det(A) * det(B)  (3x3)") {
-    auto a = make_mat<3, 3, float>({1, 2, 3, 0, 4, 5, 1, 0, 6});
-    auto b = make_mat<3, 3, float>({2, 0, 1, 1, 3, 0, 0, 2, 1});
+    auto a    = make_mat<3, 3, float>({1, 2, 3, 0, 4, 5, 1, 0, 6});
+    auto b    = make_mat<3, 3, float>({2, 0, 1, 1, 3, 0, 0, 2, 1});
     float dab = (a * b).det();
     float da  = a.det();
     float db  = b.det();
@@ -509,8 +518,8 @@ TEST_SUITE("Mat - Determinant") {
   }
 
   TEST_CASE("det(A * B) = det(A) * det(B)  (4x4)") {
-    auto a = make_mat<4, 4, float>({2, 0, 0, 0, 0, 3, 0, 0, 0, 0, 5, 0, 0, 0, 0, 7});
-    auto b = make_mat<4, 4, float>({1, 2, 0, 0, 0, 1, 3, 0, 0, 0, 1, 4, 0, 0, 0, 1});
+    auto a    = make_mat<4, 4, float>({2, 0, 0, 0, 0, 3, 0, 0, 0, 0, 5, 0, 0, 0, 0, 7});
+    auto b    = make_mat<4, 4, float>({1, 2, 0, 0, 0, 1, 3, 0, 0, 0, 1, 4, 0, 0, 0, 1});
     float dab = (a * b).det();
     float da  = a.det();
     float db  = b.det();
@@ -553,18 +562,27 @@ TEST_SUITE("Mat - Transpose") {
     // [1 2 3; 4 5 6; 7 8 9]^T = [1 4 7; 2 5 8; 3 6 9]
     auto a  = make_mat<3, 3, float>({1, 2, 3, 4, 5, 6, 7, 8, 9});
     auto at = a.transposed();
-    CHECK(at(0, 0) == 1); CHECK(at(0, 1) == 4); CHECK(at(0, 2) == 7);
-    CHECK(at(1, 0) == 2); CHECK(at(1, 1) == 5); CHECK(at(1, 2) == 8);
-    CHECK(at(2, 0) == 3); CHECK(at(2, 1) == 6); CHECK(at(2, 2) == 9);
+    CHECK(at(0, 0) == 1);
+    CHECK(at(0, 1) == 4);
+    CHECK(at(0, 2) == 7);
+    CHECK(at(1, 0) == 2);
+    CHECK(at(1, 1) == 5);
+    CHECK(at(1, 2) == 8);
+    CHECK(at(2, 0) == 3);
+    CHECK(at(2, 1) == 6);
+    CHECK(at(2, 2) == 9);
   }
 
   TEST_CASE("Non-square transpose 2x3 → 3x2") {
     auto a  = make_mat<2, 3, float>({1, 2, 3, 4, 5, 6});
     auto at = a.transposed();
     static_assert(std::is_same<decltype(at), Mat<3, 2, float>>::value, "dim check");
-    CHECK(at(0, 0) == 1); CHECK(at(0, 1) == 4);
-    CHECK(at(1, 0) == 2); CHECK(at(1, 1) == 5);
-    CHECK(at(2, 0) == 3); CHECK(at(2, 1) == 6);
+    CHECK(at(0, 0) == 1);
+    CHECK(at(0, 1) == 4);
+    CHECK(at(1, 0) == 2);
+    CHECK(at(1, 1) == 5);
+    CHECK(at(2, 0) == 3);
+    CHECK(at(2, 1) == 6);
   }
 
   TEST_CASE("In-place transpose 3x3") {
@@ -581,8 +599,8 @@ TEST_SUITE("Mat - Transpose") {
   }
 
   TEST_CASE("(A * B)^T = B^T * A^T") {
-    auto a  = make_mat<3, 3, float>({1, 2, 3, 0, 4, 5, 1, 0, 6});
-    auto b  = make_mat<3, 3, float>({2, 0, 1, 1, 3, 0, 0, 2, 1});
+    auto a   = make_mat<3, 3, float>({1, 2, 3, 0, 4, 5, 1, 0, 6});
+    auto b   = make_mat<3, 3, float>({2, 0, 1, 1, 3, 0, 0, 2, 1});
     auto lhs = (a * b).transposed();
     auto rhs = b.transposed() * a.transposed();
     CHECK(mat_approx_eq(lhs, rhs, 1e-4f));
@@ -628,7 +646,10 @@ TEST_SUITE("Mat - Inverse") {
 
   TEST_CASE("A * inv(A) = I  (4x4 diagonal)") {
     Mat4f a;
-    a(0, 0) = 2; a(1, 1) = 3; a(2, 2) = 4; a(3, 3) = 5;
+    a(0, 0) = 2;
+    a(1, 1) = 3;
+    a(2, 2) = 4;
+    a(3, 3) = 5;
     CHECK(is_identity(a * a.inverse(), 1e-4));
   }
 
@@ -638,8 +659,8 @@ TEST_SUITE("Mat - Inverse") {
   }
 
   TEST_CASE("inv(inv(A)) ~ A  (3x3)") {
-    auto a      = make_mat<3, 3, float>({1, 2, 3, 0, 4, 5, 1, 0, 6});
-    auto inv_a  = a.inverse();
+    auto a       = make_mat<3, 3, float>({1, 2, 3, 0, 4, 5, 1, 0, 6});
+    auto inv_a   = a.inverse();
     auto inv_inv = inv_a.inverse();
     CHECK(mat_approx_eq(inv_inv, a, 1e-3f));
   }
@@ -652,16 +673,18 @@ TEST_SUITE("Mat - Inverse") {
   }
 
   TEST_CASE("inv(A * B) = inv(B) * inv(A)  (3x3)") {
-    auto a    = make_mat<3, 3, float>({1, 2, 3, 0, 4, 5, 1, 0, 6});
-    auto b    = make_mat<3, 3, float>({2, 0, 1, 1, 3, 0, 0, 2, 1});
-    auto lhs  = (a * b).inverse();
-    auto rhs  = b.inverse() * a.inverse();
+    auto a   = make_mat<3, 3, float>({1, 2, 3, 0, 4, 5, 1, 0, 6});
+    auto b   = make_mat<3, 3, float>({2, 0, 1, 1, 3, 0, 0, 2, 1});
+    auto lhs = (a * b).inverse();
+    auto rhs = b.inverse() * a.inverse();
     CHECK(mat_approx_eq(lhs, rhs, 1e-3f));
   }
 
   TEST_CASE("Inverse of diagonal matrix = reciprocal diagonal") {
     Mat3f m;
-    m(0, 0) = 2; m(1, 1) = 4; m(2, 2) = 8;
+    m(0, 0)   = 2;
+    m(1, 1)   = 4;
+    m(2, 2)   = 8;
     Mat3f inv = m.inverse();
     CHECK(doctest::Approx(inv(0, 0)).epsilon(1e-5) == 0.5f);
     CHECK(doctest::Approx(inv(1, 1)).epsilon(1e-5) == 0.25f);
@@ -679,8 +702,8 @@ TEST_SUITE("Mat - Inverse") {
 
   TEST_CASE("Rotation inverse = transpose") {
     for(float angle : {0.3f, 1.0f, 2.5f}) {
-      Mat4f rx = mat4_rotation_x<float>(angle);
-      Mat4f inv = rx.inverse();
+      Mat4f rx         = mat4_rotation_x<float>(angle);
+      Mat4f inv        = rx.inverse();
       Mat4f transposed = rx.transposed();
       CHECK(mat_approx_eq(inv, transposed, 1e-4f));
     }
@@ -690,20 +713,14 @@ TEST_SUITE("Mat - Inverse") {
 // ===== Frobenius Norm ========================================================
 
 TEST_SUITE("Mat - Frobenius Norm") {
-  TEST_CASE("||I_3||_F = sqrt(3)") {
-    CHECK(doctest::Approx(Mat3f::identity().frobenius_norm()) == std::sqrt(3.0));
-  }
+  TEST_CASE("||I_3||_F = sqrt(3)") { CHECK(doctest::Approx(Mat3f::identity().frobenius_norm()) == std::sqrt(3.0)); }
 
-  TEST_CASE("||I_4||_F = sqrt(4) = 2") {
-    CHECK(doctest::Approx(Mat4f::identity().frobenius_norm()) == 2.0);
-  }
+  TEST_CASE("||I_4||_F = sqrt(4) = 2") { CHECK(doctest::Approx(Mat4f::identity().frobenius_norm()) == 2.0); }
 
-  TEST_CASE("||zeros||_F = 0") {
-    CHECK(doctest::Approx(Mat3f::zeros().frobenius_norm()) == 0.0);
-  }
+  TEST_CASE("||zeros||_F = 0") { CHECK(doctest::Approx(Mat3f::zeros().frobenius_norm()) == 0.0); }
 
   TEST_CASE("||scalar * A||_F = |scalar| * ||A||_F") {
-    auto a  = make_mat<3, 3, float>({1, 2, 3, 4, 5, 6, 7, 8, 9});
+    auto a    = make_mat<3, 3, float>({1, 2, 3, 4, 5, 6, 7, 8, 9});
     double na = a.frobenius_norm();
     double ns = (a * 3.0f).frobenius_norm();
     CHECK(doctest::Approx(ns).epsilon(1e-4) == 3.0 * na);
@@ -743,7 +760,7 @@ TEST_SUITE("Mat - Rotation Properties") {
   }
 
   TEST_CASE("Rx(a) * Rx(-a) = I") {
-    float angle = 0.7f;
+    float angle  = 0.7f;
     Mat4f rx_pos = mat4_rotation_x<float>(angle);
     Mat4f rx_neg = mat4_rotation_x<float>(-angle);
     CHECK(is_identity(rx_pos * rx_neg, 1e-4));
@@ -752,7 +769,7 @@ TEST_SUITE("Mat - Rotation Properties") {
   TEST_CASE("Rodrigues axis-angle rotation: det = 1") {
     Vec3f axis(1, 1, 1);
     float angle = 1.0f;
-    Mat4f r = mat4_rotation<float>(axis, angle);
+    Mat4f r     = mat4_rotation<float>(axis, angle);
     CHECK(doctest::Approx(r.det()).epsilon(1e-4) == 1.0f);
   }
 
@@ -792,13 +809,28 @@ TEST_SUITE("Mat - SIMD 4x4 float correctness") {
   TEST_CASE("4x4 * 4x4 non-trivial product") {
     // Build matrices explicitly and verify one element
     Mat4f a;
-    a(0, 0) = 1; a(0, 1) = 2; a(0, 2) = 3; a(0, 3) = 4;
-    a(1, 0) = 0; a(1, 1) = 1; a(1, 2) = 0; a(1, 3) = 1;
-    a(2, 0) = 1; a(2, 1) = 0; a(2, 2) = 1; a(2, 3) = 0;
-    a(3, 0) = 0; a(3, 1) = 0; a(3, 2) = 0; a(3, 3) = 1;
+    a(0, 0) = 1;
+    a(0, 1) = 2;
+    a(0, 2) = 3;
+    a(0, 3) = 4;
+    a(1, 0) = 0;
+    a(1, 1) = 1;
+    a(1, 2) = 0;
+    a(1, 3) = 1;
+    a(2, 0) = 1;
+    a(2, 1) = 0;
+    a(2, 2) = 1;
+    a(2, 3) = 0;
+    a(3, 0) = 0;
+    a(3, 1) = 0;
+    a(3, 2) = 0;
+    a(3, 3) = 1;
 
     Mat4f b = Mat4f::identity();
-    b(0, 3) = 5; b(1, 3) = 6; b(2, 3) = 7; b(3, 3) = 1;
+    b(0, 3) = 5;
+    b(1, 3) = 6;
+    b(2, 3) = 7;
+    b(3, 3) = 1;
 
     Mat4f c = a * b;
     // row0 of c: [1 2 3 (4+5*1+2*6+3*7+4*1)] = [1 2 3 ?]
@@ -825,10 +857,22 @@ TEST_SUITE("Mat - SIMD 4x4 float correctness") {
 
   TEST_CASE("4x4 * vec4: known result") {
     Mat4f m;
-    m(0, 0) = 1; m(0, 1) = 0; m(0, 2) = 0; m(0, 3) = 5;
-    m(1, 0) = 0; m(1, 1) = 1; m(1, 2) = 0; m(1, 3) = 0;
-    m(2, 0) = 0; m(2, 1) = 0; m(2, 2) = 1; m(2, 3) = 0;
-    m(3, 0) = 0; m(3, 1) = 0; m(3, 2) = 0; m(3, 3) = 1;
+    m(0, 0) = 1;
+    m(0, 1) = 0;
+    m(0, 2) = 0;
+    m(0, 3) = 5;
+    m(1, 0) = 0;
+    m(1, 1) = 1;
+    m(1, 2) = 0;
+    m(1, 3) = 0;
+    m(2, 0) = 0;
+    m(2, 1) = 0;
+    m(2, 2) = 1;
+    m(2, 3) = 0;
+    m(3, 0) = 0;
+    m(3, 1) = 0;
+    m(3, 2) = 0;
+    m(3, 3) = 1;
     Vec4f v(1, 2, 3, 1);
     Vec4f r = m * v;
     CHECK(doctest::Approx(r[0]) == 6.0f); // 1 + 5*1
@@ -856,7 +900,7 @@ TEST_SUITE("Mat - Projection Matrices") {
     double near = 1.0, far = 100.0;
     Mat4f p = mat4_perspective<float>(M_PI / 4.0, 1.0, near, far);
     Vec4f pt(0, 0, -(float)far, 1);
-    Vec4f clip = p * pt;
+    Vec4f clip  = p * pt;
     float z_ndc = clip[2] / clip[3];
     CHECK(doctest::Approx(z_ndc).epsilon(1e-4) == 1.0f);
   }

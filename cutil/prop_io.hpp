@@ -43,14 +43,14 @@ struct PropSchemaFieldDesc {
 };
 
 struct PropSchemaEntry {
-  char type_id[64]   = {};
-  uint32_t version    = 1;
+  char type_id[64]     = {};
+  uint32_t version     = 1;
   uint32_t size        = 0; // Trivial型のversion不一致時、レイアウト同一かどうかの判定に使う
   uint32_t field_count = 0;
 };
 
 struct PropValueEntry {
-  char name[32]        = {};
+  char name[32]         = {};
   uint32_t schema_index = 0;
   uint32_t data_offset  = 0; // [DataBlock]内でのoffset
   uint32_t data_size    = 0;
@@ -96,8 +96,10 @@ inline void write_value_binary(const PropInfo* type, const void* obj, std::vecto
 // blob[offset..]からtypeの値をobj(未構築)へ再構築する。読み終えた次のoffsetを返す。
 inline size_t read_value_binary(const PropInfo* type, void* obj, const uint8_t* blob, size_t offset) {
   if(!type->fields.empty()) {
-    if(type->default_ctor) type->default_ctor(obj);
-    else std::memset(obj, 0, type->size);
+    if(type->default_ctor)
+      type->default_ctor(obj);
+    else
+      std::memset(obj, 0, type->size);
     for(const auto& f : type->fields) {
       auto* fptr = reinterpret_cast<uint8_t*>(obj) + f.offset;
       if(f.type->klass == PropClass::Trivial) {
@@ -114,8 +116,10 @@ inline size_t read_value_binary(const PropInfo* type, void* obj, const uint8_t* 
     uint32_t n = 0;
     std::memcpy(&n, blob + offset, sizeof(n));
     offset += sizeof(n);
-    if(type->default_ctor) type->default_ctor(obj);
-    else std::memset(obj, 0, type->size);
+    if(type->default_ctor)
+      type->default_ctor(obj);
+    else
+      std::memset(obj, 0, type->size);
     if(type->element_type->klass == PropClass::Trivial) {
       type->seq_assign_raw(obj, blob + offset, n);
       offset += static_cast<size_t>(n) * type->element_type->size;
@@ -144,13 +148,12 @@ inline size_t read_value_binary(const PropInfo* type, void* obj, const uint8_t* 
 // dump: 全フィールドを人間可読なJSON文字列へ変換する。各フィールドの型のto_json()を呼ぶだけで済み型ごとのswitch分岐は不要になった。
 inline bool prop_dump_json(const Prop& prop, std::string& out) {
   const uint8_t* base = prop.raw_data();
-  std::string body     = "{";
-  bool first            = true;
+  std::string body    = "{";
+  bool first          = true;
   for(const auto& f : prop.fields()) {
     if(!first) body += ",";
     first = false;
-    body += detail::json_quote(f.name) + ":{" + detail::json_quote("type_id") + ":" + detail::json_quote(f.type->id) + "," + detail::json_quote("version") + ":" + std::to_string(f.type->version) + "," +
-            detail::json_quote("value") + ":" + f.type->to_json(base + f.offset) + "}";
+    body += detail::json_quote(f.name) + ":{" + detail::json_quote("type_id") + ":" + detail::json_quote(f.type->id) + "," + detail::json_quote("version") + ":" + std::to_string(f.type->version) + "," + detail::json_quote("value") + ":" + f.type->to_json(base + f.offset) + "}";
   }
   body += "}";
   out = body;
@@ -169,8 +172,10 @@ inline bool prop_load_json(Prop& prop, const std::string& text) {
     for(const auto& kv : detail::json_split_top_level(field_body)) {
       std::string k, v;
       if(!detail::json_split_kv(kv, k, v)) continue;
-      if(k == "type_id") type_id = detail::json_unquote(v);
-      else if(k == "value") value_json = v;
+      if(k == "type_id")
+        type_id = detail::json_unquote(v);
+      else if(k == "value")
+        value_json = v;
     }
 
     const PropInfo* type = PropInfoRegistry::instance().find(type_id);
@@ -191,8 +196,8 @@ inline bool prop_load_json(Prop& prop, const std::string& text) {
 namespace detail {
 // prop_info_of<Prop>()はprop_dump_json/prop_load_json定義前にbindできないため、このファイル読み込み時に一度だけ遅延バインドする。
 inline bool bind_prop_info_of_prop_to_json() {
-  auto* info      = const_cast<PropInfo*>(prop_info_of<Prop>());
-  info->to_json   = [](const void* obj) -> std::string {
+  auto* info    = const_cast<PropInfo*>(prop_info_of<Prop>());
+  info->to_json = [](const void* obj) -> std::string {
     std::string json;
     prop_dump_json(*reinterpret_cast<const Prop*>(obj), json);
     return json;
@@ -209,7 +214,7 @@ inline bool prop_info_of_prop_bound = bind_prop_info_of_prop_to_json();
 using PropLoadFallback = std::function<bool(Prop&, const std::vector<uint8_t>&)>;
 
 inline bool prop_dump_binary(const Prop& prop, std::vector<uint8_t>& out) {
-  const auto& fields   = prop.fields();
+  const auto& fields  = prop.fields();
   const uint8_t* base = prop.raw_data();
 
   // 1. 型収集(重複排除): 値ごとに繰り返さず型ごとに1回だけSchemaSectionへ記録する。
@@ -253,7 +258,7 @@ inline bool prop_dump_binary(const Prop& prop, std::vector<uint8_t>& out) {
     PropSchemaEntry se;
     std::strncpy(se.type_id, s->id, sizeof(se.type_id) - 1);
     se.version     = s->version;
-    se.size         = static_cast<uint32_t>(s->size);
+    se.size        = static_cast<uint32_t>(s->size);
     se.field_count = static_cast<uint32_t>(s->fields.size());
     detail::append_bytes(out, &se, sizeof(se));
     for(const auto& f : s->fields) {
@@ -319,16 +324,16 @@ inline bool prop_load_binary(Prop& prop, const std::vector<uint8_t>& bytes, cons
   }
 
   size_t data_block_offset = cursor;
-  size_t data_block_size    = 0;
+  size_t data_block_size   = 0;
   for(const auto& e : entries) data_block_size = std::max(data_block_size, static_cast<size_t>(e.data_offset) + e.data_size);
   size_t blob_block_offset = data_block_offset + data_block_size;
   if(blob_block_offset > bytes.size()) return do_fallback();
   const uint8_t* blob = bytes.data() + blob_block_offset;
-  size_t blob_size     = bytes.size() - blob_block_offset;
+  size_t blob_size    = bytes.size() - blob_block_offset;
 
   for(uint32_t i = 0; i < header.entry_count; i++) {
-    const auto& ve             = entries[i];
-    const auto& file_schema    = schemas[ve.schema_index];
+    const auto& ve            = entries[i];
+    const auto& file_schema   = schemas[ve.schema_index];
     const PropInfo* live_type = PropInfoRegistry::instance().find(file_schema.entry.type_id);
 
     size_t entry_data_offset = data_block_offset + ve.data_offset;
@@ -364,8 +369,10 @@ inline bool prop_load_binary(Prop& prop, const std::vector<uint8_t>& bytes, cons
       if(file_schema.fields.empty() || live_type->fields.empty()) continue;
 
       std::vector<uint8_t> storage(live_type->size);
-      if(live_type->default_ctor) live_type->default_ctor(storage.data());
-      else std::memset(storage.data(), 0, live_type->size);
+      if(live_type->default_ctor)
+        live_type->default_ctor(storage.data());
+      else
+        std::memset(storage.data(), 0, live_type->size);
 
       uint32_t blob_offset = 0, blob_len = 0;
       std::memcpy(&blob_offset, bytes.data() + entry_data_offset, 4);

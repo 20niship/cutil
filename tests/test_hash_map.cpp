@@ -159,7 +159,7 @@ TEST_SUITE("hash_map - Iteration") {
     map.insert("y", 20);
 
     const auto& const_map = map;
-    int sum = 0;
+    int sum               = 0;
     for(const auto& item : const_map) {
       sum += item.second;
     }

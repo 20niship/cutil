@@ -1,0 +1,19 @@
+version: '3'
+
+tasks:
+  format:
+    desc: clang-formatで全ファイルをフォーマットする
+    cmds:
+      - python3 scripts/run_clang_format.py
+
+  build:
+    desc: cmake configure + ビルド
+    cmds:
+      - cmake -S . -B build
+      - cmake --build build -j
+
+  check:
+    desc: ビルドしてテストを実行する
+    deps: [build]
+    cmds:
+      - ctest --test-dir build --output-on-failure

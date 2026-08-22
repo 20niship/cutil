@@ -5,9 +5,9 @@
 
 using cutil::CustomSlot;
 using cutil::Prop;
+using cutil::PropClass;
 using cutil::PropInfo;
 using cutil::PropInfoRegistry;
-using cutil::PropClass;
 using cutil::register_dynamic_type;
 
 namespace {
@@ -15,7 +15,7 @@ namespace {
 // issueに出てくるVideo型のようなカスタム型のダミー実装。
 struct DummyVideoClip {
   std::string path;
-  int fps = 0;
+  int fps        = 0;
   int copy_count = 0; // copy_ctorが実際に呼ばれたことを確認するためのカウンタ
 
   DummyVideoClip() = default;
@@ -41,9 +41,7 @@ TEST_SUITE("PropInfoRegistry") {
     CHECK(info->dtor != nullptr);
   }
 
-  TEST_CASE("find unregistered type returns nullptr") {
-    CHECK(PropInfoRegistry::instance().find("NonexistentType12345") == nullptr);
-  }
+  TEST_CASE("find unregistered type returns nullptr") { CHECK(PropInfoRegistry::instance().find("NonexistentType12345") == nullptr); }
 }
 
 TEST_SUITE("CustomSlot") {
@@ -117,7 +115,7 @@ TEST_SUITE("Prop - Custom fields via set_custom/get_custom") {
     };
 
     static const PropInfo rule = {
-        {"video", offsetof(Entity, video), cutil::prop_info_of<CustomSlot>()},
+      {"video", offsetof(Entity, video), cutil::prop_info_of<CustomSlot>()},
     };
 
     Entity a;

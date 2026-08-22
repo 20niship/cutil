@@ -4,8 +4,8 @@
 #include <functional>
 #include <memory>
 #include <string>
-#include <typeinfo>
 #include <tuple>
+#include <typeinfo>
 #include <utility>
 
 namespace cutil {

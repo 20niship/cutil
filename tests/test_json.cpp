@@ -97,7 +97,7 @@ TEST_SUITE("json - Basic Operations") {
     Value v1 = Value::parse(R"({"x": 10, "y": [1,2,3]})", &ok);
     CHECK(ok);
     std::string dumped = v1.dump();
-    Value v2            = Value::parse(dumped, &ok);
+    Value v2           = Value::parse(dumped, &ok);
     CHECK(ok);
     CHECK(v2.is_object());
     CHECK(v2.get("x").as_int() == 10);

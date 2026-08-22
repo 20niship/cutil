@@ -25,9 +25,9 @@ namespace cutil {
 template <> struct PropInfoOf<VersionedThing> {
   static const PropInfo* get() {
     return register_struct_type<VersionedThing>("VersionedThing", {
-                                                                        {"x", offsetof(VersionedThing, x), prop_info_of<int32_t>()},
-                                                                        {"y", offsetof(VersionedThing, y), prop_info_of<float>()},
-                                                                    });
+                                                                    {"x", offsetof(VersionedThing, x), prop_info_of<int32_t>()},
+                                                                    {"y", offsetof(VersionedThing, y), prop_info_of<float>()},
+                                                                  });
   }
 };
 } // namespace cutil
@@ -85,7 +85,7 @@ TEST_SUITE("prop_dump_binary / prop_load_binary - POD only") {
 
     Prop b;
     bool fallback_called = false;
-    bool ok = cutil::prop_load_binary(b, bytes, [&](Prop&, const std::vector<uint8_t>&) {
+    bool ok              = cutil::prop_load_binary(b, bytes, [&](Prop&, const std::vector<uint8_t>&) {
       fallback_called = true;
       return false;
     });
@@ -111,8 +111,8 @@ TEST_SUITE("prop_dump_binary / prop_load_binary - POD only") {
     info->version = original_version + 1; // 保存後にプロセス内スキーマのversionを上げ、ファイル記録と不一致にする
 
     Prop b;
-    bool ok = cutil::prop_load_binary(b, bytes); // fallbackコールバックなしでも、型単位のslow pathでそのフィールドだけ復元を試みる
-    info->version = original_version;            // 後片付け(他テストへ影響しないように)
+    bool ok       = cutil::prop_load_binary(b, bytes); // fallbackコールバックなしでも、型単位のslow pathでそのフィールドだけ復元を試みる
+    info->version = original_version;                  // 後片付け(他テストへ影響しないように)
 
     CHECK(ok);
     CHECK(b.get<VersionedThing>("v").x == 42);

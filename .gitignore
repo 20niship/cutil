@@ -43,3 +43,4 @@ py\.typed
 .mypy_cache
 build/
 .aider*
+*.swp
