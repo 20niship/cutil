@@ -82,6 +82,9 @@ public:
   std::vector<Ref<Mesh>> meshes;
   WeakPtr<Model> parent; // WeakPtr で循環参照を防止
   std::vector<Ref<Model>> children;
+  Vec3f pos;
+  bool visible    = false;
+  int32_t mesh_id = -1; // Meshへの参照(整数ハンドル)
 
   // Prop::dump()/load_to() 用のルール。name/positionはPOD/Str相当、
   // parent/meshes/childrenはPropType::Ref/RefList経由で「生ポインタ」として
@@ -95,6 +98,9 @@ public:
       PropInfo::Field::make_ref<Model>("parent", offsetof(Model, parent)),
       PropInfo::Field::make_ref_list<Mesh>("meshes", offsetof(Model, meshes)),
       PropInfo::Field::make_ref_list<Model>("children", offsetof(Model, children)),
+      {"pos", offsetof(Model, pos), prop_info_of<Vec3f>()},
+      {"visible", offsetof(Model, visible), prop_info_of<bool>()},
+      {"mesh_id", offsetof(Model, mesh_id), prop_info_of<int32_t>()},
     };
     return &rule;
   }
@@ -161,6 +167,7 @@ class Scene final : public enable_ref_from_this<Scene> {
 public:
   std::string name;
   std::vector<Ref<Model>> root_models;
+  std::vector<int32_t> model_ids;
 
   void add_model(Ref<Model> model) {
     if(!model) return;
@@ -273,41 +280,9 @@ struct EnttManager {
   std::unordered_map<std::type_index, EnttDataImpl> entt_;
 };
 
-// EnttManagerに積む軽量コンポーネント。全フィールドPOD/Str/vectorでprop_info_of<T>()に乗る。
-struct EnttModel3D {
-  Vec3f pos;
-  Str name;
-  bool visible    = false;
-  int32_t mesh_id = -1; // Meshへの参照(ファイル境界を越えても有効な整数ハンドル)
-};
-
-// 複数のModel3Dを束ねるコンポーネント。Ref/RefListはファイル永続化に使えないため整数ハンドル(model_id)のリストで参照する。
-struct EnttScene {
-  Str name;
-  std::vector<int32_t> model_ids;
-};
-
 template <> struct PropInfoOf<Vertex> {
   static const PropInfo* get() {
     return register_struct_type<Vertex>("Vertex", {{"pos", offsetof(Vertex, pos), prop_info_of<Vec3f>()}, {"normal", offsetof(Vertex, normal), prop_info_of<Vec3f>()}, {"u", offsetof(Vertex, u), prop_info_of<float>()}, {"v", offsetof(Vertex, v), prop_info_of<float>()}});
-  }
-};
-template <> struct PropInfoOf<EnttModel3D> {
-  static const PropInfo* get() {
-    return register_struct_type<EnttModel3D>("Model3D", {
-                                                          {"pos", offsetof(EnttModel3D, pos), prop_info_of<Vec3f>()},
-                                                          {"name", offsetof(EnttModel3D, name), prop_info_of<Str>()},
-                                                          {"visible", offsetof(EnttModel3D, visible), prop_info_of<bool>()},
-                                                          {"mesh_id", offsetof(EnttModel3D, mesh_id), prop_info_of<int32_t>()},
-                                                        });
-  }
-};
-template <> struct PropInfoOf<EnttScene> {
-  static const PropInfo* get() {
-    return register_struct_type<EnttScene>("Scene", {
-                                                      {"name", offsetof(EnttScene, name), prop_info_of<Str>()},
-                                                      {"model_ids", offsetof(EnttScene, model_ids), prop_info_of<std::vector<int32_t>>()},
-                                                    });
   }
 };
 
