@@ -20,7 +20,6 @@ add_executable(tests_main
     test_quaternion.cpp
     test_rect3d.cpp
     test_path.cpp
-    test_json.cpp
     test_prop_info.cpp
     test_prop.cpp
     test_prop_dump_load.cpp
@@ -33,7 +32,6 @@ add_executable(tests_main
 
 # Link doctest header
 target_include_directories(tests_main PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../ext)
-target_include_directories(tests_main PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../ext/json/single_include)
 
 # Register tests
 add_test(NAME tests COMMAND tests_main)

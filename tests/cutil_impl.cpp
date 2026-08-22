@@ -1,6 +1,4 @@
-// STBスタイルの実装定義用TU。CUTIL_IMPLEMENTATION を定義した上でヘッダーをincludeすることで、
-// 通常は宣言のみ公開されるヘッダー(cutil/path.hpp, cutil/json.hpp等)の実装本体をここでのみ定義する。
+// STBスタイルの実装定義用TU。CUTIL_IMPLEMENTATIONを定義した上でincludeすることで宣言のみのヘッダーの実装本体をここでのみ定義する。
 #define CUTIL_IMPLEMENTATION
-#include <cutil/json.hpp>
 #include <cutil/path.hpp>
 #include <cutil/prop.hpp>
