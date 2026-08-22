@@ -7,17 +7,27 @@ namespace cutil {
 // Rect3D: cutil::Rect(2D)の3D版。3軸(x,y,z)のRangeを持つAABB(軸並行境界ボックス)。
 struct Rect3D {
   Range x, y, z;
-  Rect3D() { x.clear(); y.clear(); z.clear(); }
+  Rect3D() {
+    x.clear();
+    y.clear();
+    z.clear();
+  }
   Rect3D(const Range& xr, const Range& yr, const Range& zr) : x(xr), y(yr), z(zr) {}
   Rect3D(float xmin, float xmax, float ymin, float ymax, float zmin, float zmax) {
-    x.min = xmin; x.max = xmax;
-    y.min = ymin; y.max = ymax;
-    z.min = zmin; z.max = zmax;
+    x.min = xmin;
+    x.max = xmax;
+    y.min = ymin;
+    y.max = ymax;
+    z.min = zmin;
+    z.max = zmax;
   }
   Rect3D(const Vec3f& pos, const Vec3f& size) {
-    x.min = pos.data[0]; x.max = pos.data[0] + size.data[0];
-    y.min = pos.data[1]; y.max = pos.data[1] + size.data[1];
-    z.min = pos.data[2]; z.max = pos.data[2] + size.data[2];
+    x.min = pos.data[0];
+    x.max = pos.data[0] + size.data[0];
+    y.min = pos.data[1];
+    y.max = pos.data[1] + size.data[1];
+    z.min = pos.data[2];
+    z.max = pos.data[2] + size.data[2];
   }
 
   [[nodiscard]] Vec3f center() const { return Vec3f(x.center(), y.center(), z.center()); }
@@ -60,8 +70,7 @@ struct Rect3D {
   static Rect3D PosSize(const Vec3f& p, const Vec3f& s) { return {p, s}; }
   static Rect3D CenterSize(const Vec3f& c, const Vec3f& s) {
     Vec3f half = s / 2.0f;
-    return {Range(c.data[0] - half.data[0], c.data[0] + half.data[0]), Range(c.data[1] - half.data[1], c.data[1] + half.data[1]),
-            Range(c.data[2] - half.data[2], c.data[2] + half.data[2])};
+    return {Range(c.data[0] - half.data[0], c.data[0] + half.data[0]), Range(c.data[1] - half.data[1], c.data[1] + half.data[1]), Range(c.data[2] - half.data[2], c.data[2] + half.data[2])};
   }
 };
 inline void operator|=(Rect3D& r1, const Rect3D& r2) { r1 = r1 | r2; }

@@ -17,7 +17,7 @@ TEST_SUITE("Entity - Prop dump/load_to via get_propinfo") {
   }
 
   TEST_CASE("Model::get_propinfo round-trips name/position (POD/Str fields)") {
-    auto a       = Model::Create("original");
+    auto a         = Model::Create("original");
     a->position[0] = 1.0f;
     a->position[1] = 2.0f;
     a->position[2] = 3.0f;
@@ -102,9 +102,9 @@ TEST_SUITE("Entity - Mesh/Model::dump()/load() wrappers") {
   }
 
   TEST_CASE("Model::dump()/load() round-trips POD/Str fields and references") {
-    auto parent = Model::Create("parent");
-    auto model  = Model::Create("model");
-    auto mesh   = Mesh::Create(5);
+    auto parent        = Model::Create("parent");
+    auto model         = Model::Create("model");
+    auto mesh          = Mesh::Create(5);
     model->position[0] = 9.0f;
     model->add_mesh(mesh);
     parent->add_child(model);

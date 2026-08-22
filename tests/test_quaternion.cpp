@@ -127,8 +127,8 @@ TEST_SUITE("Quat - Euler") {
 
 TEST_SUITE("Quat - Slerp") {
   TEST_CASE("slerp at t=0 and t=1 returns the endpoints") {
-    Quatd a = Quatd::from_axis_angle(Vec3d(0.0, 0.0, 1.0), 0.0);
-    Quatd b = Quatd::from_axis_angle(Vec3d(0.0, 0.0, 1.0), 1.5);
+    Quatd a  = Quatd::from_axis_angle(Vec3d(0.0, 0.0, 1.0), 0.0);
+    Quatd b  = Quatd::from_axis_angle(Vec3d(0.0, 0.0, 1.0), 1.5);
     Quatd s0 = a.slerp(b, 0.0);
     Quatd s1 = a.slerp(b, 1.0);
     CHECK(doctest::Approx(s0.w) == a.w);

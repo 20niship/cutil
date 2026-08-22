@@ -227,13 +227,13 @@ TEST_SUITE("dictionary - Helper Methods") {
     dict1.insert("b", 2);
 
     dictionary<int> dict2;
-    dict2.insert("b", 20);  // Override
+    dict2.insert("b", 20); // Override
     dict2.insert("c", 3);
 
     dict1.merge(dict2);
     CHECK(dict1.size() == 3);
     CHECK(dict1.at("a") == 1);
-    CHECK(dict1.at("b") == 20);  // Updated
+    CHECK(dict1.at("b") == 20); // Updated
     CHECK(dict1.at("c") == 3);
   }
 
@@ -256,7 +256,7 @@ TEST_SUITE("dictionary - Helper Methods") {
 
     size_t erased = dict.erase_if([](const std::string& key, int value) { return value % 3 == 0; });
 
-    CHECK(erased == 4);  // 0, 3, 6, 9
+    CHECK(erased == 4); // 0, 3, 6, 9
     CHECK(dict.size() == 6);
   }
 }

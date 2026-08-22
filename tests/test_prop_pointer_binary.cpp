@@ -147,7 +147,7 @@ TEST_SUITE("prop_dump_binary / prop_load_binary - Indirect/Dynamic types") {
     std::memcpy(&ve, bytes.data() + entry_offset, sizeof(ve));
 
     size_t data_block_offset = entry_offset + sizeof(cutil::PropValueEntry);
-    size_t desc_offset        = data_block_offset + ve.data_offset;
+    size_t desc_offset       = data_block_offset + ve.data_offset;
     uint32_t blob_offset = 0, blob_size = 0;
     std::memcpy(&blob_offset, bytes.data() + desc_offset, 4);
     std::memcpy(&blob_size, bytes.data() + desc_offset + 4, 4);

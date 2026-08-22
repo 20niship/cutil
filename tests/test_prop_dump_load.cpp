@@ -29,15 +29,9 @@ struct Model3D {
 // 型ごとに一度だけ静的に生成される「ルール」。
 const PropInfo& Model3DInfo() {
   static const PropInfo rule = {
-      {"pos", offsetof(Model3D, pos), cutil::prop_info_of<Vec3f>()},
-      {"scale", offsetof(Model3D, scale), cutil::prop_info_of<Vec3f>()},
-      {"quat", offsetof(Model3D, quat), cutil::prop_info_of<Quat<float>>()},
-      {"path", offsetof(Model3D, path), cutil::prop_info_of<Path>()},
-      {"name", offsetof(Model3D, name), cutil::prop_info_of<Str>()},
-      {"visible", offsetof(Model3D, visible), cutil::prop_info_of<bool>()},
-      {"animate", offsetof(Model3D, animate), cutil::prop_info_of<bool>()},
-      {"bbox", offsetof(Model3D, bbox), cutil::prop_info_of<Rect3D>()},
-      {"color", offsetof(Model3D, color), cutil::prop_info_of<Vec4f>()},
+    {"pos", offsetof(Model3D, pos), cutil::prop_info_of<Vec3f>()},        {"scale", offsetof(Model3D, scale), cutil::prop_info_of<Vec3f>()}, {"quat", offsetof(Model3D, quat), cutil::prop_info_of<Quat<float>>()},
+    {"path", offsetof(Model3D, path), cutil::prop_info_of<Path>()},       {"name", offsetof(Model3D, name), cutil::prop_info_of<Str>()},     {"visible", offsetof(Model3D, visible), cutil::prop_info_of<bool>()},
+    {"animate", offsetof(Model3D, animate), cutil::prop_info_of<bool>()}, {"bbox", offsetof(Model3D, bbox), cutil::prop_info_of<Rect3D>()},  {"color", offsetof(Model3D, color), cutil::prop_info_of<Vec4f>()},
   };
   return rule;
 }

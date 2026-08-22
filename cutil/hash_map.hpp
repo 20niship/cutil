@@ -80,21 +80,13 @@ public:
       return tmp;
     }
 
-    reference operator*() const {
-      return reinterpret_cast<reference>(map_->buckets_[index_]);
-    }
-
-    pointer operator->() const {
-      return reinterpret_cast<pointer>(std::addressof(map_->buckets_[index_]));
-    }
-
+    reference operator*() const { return reinterpret_cast<reference>(map_->buckets_[index_]); }
+    pointer operator->() const { return reinterpret_cast<pointer>(std::addressof(map_->buckets_[index_])); }
     bool operator==(const iterator& other) const { return map_ == other.map_ && index_ == other.index_; }
-
     bool operator!=(const iterator& other) const { return !(*this == other); }
 
   private:
     iterator(hash_map* map, size_t index) : map_(map), index_(index) {}
-
     hash_map* map_;
     size_t index_;
   };
@@ -129,16 +121,9 @@ public:
       return tmp;
     }
 
-    reference operator*() const {
-      return reinterpret_cast<reference>(const_cast<Node&>(map_->buckets_[index_]));
-    }
-
-    pointer operator->() const {
-      return reinterpret_cast<pointer>(const_cast<Node*>(std::addressof(map_->buckets_[index_])));
-    }
-
+    reference operator*() const { return reinterpret_cast<reference>(const_cast<Node&>(map_->buckets_[index_])); }
+    pointer operator->() const { return reinterpret_cast<pointer>(const_cast<Node*>(std::addressof(map_->buckets_[index_]))); }
     bool operator==(const const_iterator& other) const { return map_ == other.map_ && index_ == other.index_; }
-
     bool operator!=(const const_iterator& other) const { return !(*this == other); }
 
   private:
@@ -205,9 +190,9 @@ public:
     bool inserted = !buckets_[idx].occupied;
 
     if(inserted) {
-      buckets_[idx].key = key;
-      buckets_[idx].value = value;
-      buckets_[idx].occupied = true;
+      buckets_[idx].key       = key;
+      buckets_[idx].value     = value;
+      buckets_[idx].occupied  = true;
       buckets_[idx].hash_code = Hash{}(key);
       ++size_;
     } else {
