@@ -7,6 +7,10 @@
 #include <string>
 #include <type_traits>
 
+#ifdef __SSE2__
+#include <immintrin.h>
+#endif
+
 // Mat<Rows, Cols, T>: Matrix with column-major storage (OpenGL/GLSL convention)
 // Element access: (row, col) -> data[col * Rows + row]
 // SIMD-optimized for Mat<4, 4, float> with SSE2
@@ -360,7 +364,6 @@ template <unsigned int Rows, unsigned int K, unsigned int Cols, typename T> inli
 
 // ---- SIMD specialization for Mat<4,4> * Mat<4,4> float (SSE2) --------
 #ifdef __SSE2__
-#include <immintrin.h>
 
 template <> inline void mat_mul_impl<4, 4, 4, float>(const float* A, const float* B, float* C) {
   // Optimized 4x4 float matrix multiplication using SSE2
