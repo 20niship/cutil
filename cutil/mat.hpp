@@ -7,7 +7,18 @@
 #include <string>
 #include <type_traits>
 
-#ifdef __SSE2__
+// SSE2 SIMD support detection
+// __SSE2__ が定義されていて、かつ <immintrin.h> が存在する環境でのみ有効化する
+// (コンパイラやプラットフォームによってはヘッダが存在しない場合があるため)
+#if defined(__SSE2__)
+#  if !defined(__has_include)
+#    define CUTIL_HAS_SSE2 1
+#  elif __has_include(<immintrin.h>)
+#    define CUTIL_HAS_SSE2 1
+#  endif
+#endif
+
+#ifdef CUTIL_HAS_SSE2
 #include <immintrin.h>
 #endif
 
@@ -363,7 +374,7 @@ template <unsigned int Rows, unsigned int K, unsigned int Cols, typename T> inli
 }
 
 // ---- SIMD specialization for Mat<4,4> * Mat<4,4> float (SSE2) --------
-#ifdef __SSE2__
+#ifdef CUTIL_HAS_SSE2
 
 template <> inline void mat_mul_impl<4, 4, 4, float>(const float* A, const float* B, float* C) {
   // Optimized 4x4 float matrix multiplication using SSE2
