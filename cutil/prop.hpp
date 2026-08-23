@@ -730,7 +730,28 @@ private:
 
   PropInfo::Field& add_field(const char* name, const PropInfo* type) {
     size_t new_offset = align_up(data_.size(), type->align);
-    data_.resize(new_offset + type->size, 0);
+    size_t new_size   = new_offset + type->size;
+
+    // バッファ拡張でreallocが起きる場合、Indirect型(std::string等)のオブジェクトは
+    // 内部に自己参照ポインタ(SSOの_M_p等)を持つため単純なバイトコピーでは壊れる。
+    // 全フィールドを新バッファへ再構築(copy_ctor + dtor)してから差し替える。
+    if(new_size > data_.capacity()) {
+      std::vector<uint8_t> new_data(new_size, 0);
+      for(const auto& f : fields_) {
+        const uint8_t* src = data_.data() + f.offset;
+        uint8_t* dst       = new_data.data() + f.offset;
+        if(f.type->klass != PropClass::Trivial && f.type->copy_ctor && f.type->dtor) {
+          f.type->copy_ctor(dst, src);
+          f.type->dtor(const_cast<uint8_t*>(src));
+        } else {
+          std::memcpy(dst, src, f.type->size);
+        }
+      }
+      data_.swap(new_data);
+    } else {
+      data_.resize(new_size, 0);
+    }
+
     fields_.emplace_back(name, new_offset, type);
     return fields_.back();
   }
