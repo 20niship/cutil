@@ -33,7 +33,10 @@ const PropInfo* PropInfoOf<int32_t>::get() {
         int32_t v = static_cast<int32_t>(std::stoll(detail::json_trim(text)));
         std::memcpy(obj, &v, sizeof(int32_t));
         return true;
-      } catch(...) { return false; } // 数値として読めないtextはエラーとして扱う(std::stollは非数値で例外を投げる)
+      } catch(const std::exception& e) {
+        CUTIL_PRINTF("[cutil::PropInfoOf<int32_t>::from_json] '%s' is not a number: %s\n", text.c_str(), e.what());
+        return false;
+      }
     };
     return p;
   }();
@@ -53,7 +56,10 @@ const PropInfo* PropInfoOf<float>::get() {
         float v = static_cast<float>(std::stod(detail::json_trim(text)));
         std::memcpy(obj, &v, sizeof(float));
         return true;
-      } catch(...) { return false; }
+      } catch(const std::exception& e) {
+        CUTIL_PRINTF("[cutil::PropInfoOf<float>::from_json] '%s' is not a number: %s\n", text.c_str(), e.what());
+        return false;
+      }
     };
     return p;
   }();
@@ -73,7 +79,10 @@ const PropInfo* PropInfoOf<uint8_t>::get() {
         uint8_t v = static_cast<uint8_t>(std::stoi(detail::json_trim(text)));
         std::memcpy(obj, &v, sizeof(uint8_t));
         return true;
-      } catch(...) { return false; }
+      } catch(const std::exception& e) {
+        CUTIL_PRINTF("[cutil::PropInfoOf<uint8_t>::from_json] '%s' is not a number: %s\n", text.c_str(), e.what());
+        return false;
+      }
     };
     return p;
   }();
@@ -269,7 +278,8 @@ const PropInfo* PropInfoOf<std::vector<uint8_t>>::get() {
       for(const auto& part : detail::json_split_top_level(text)) {
         try {
           v->push_back(static_cast<uint8_t>(std::stoi(part)));
-        } catch(...) {
+        } catch(const std::exception& e) {
+          CUTIL_PRINTF("[cutil::PropInfoOf<vector<uint8_t>>::from_json] '%s' is not a number: %s\n", part.c_str(), e.what());
           v->~vector(); // 既にplacement-newした分を破棄してから失敗を返す
           return false;
         }
@@ -489,7 +499,9 @@ std::string json_unquote(const std::string& s) {
             try {
               int code = std::stoi(s.substr(i + 1, 4), nullptr, 16); // BMP内ASCII相当のみを想定した簡易デコード
               out += static_cast<char>(code);
-            } catch(...) {} // 4桁が16進数でなければこの1エスケープだけ無視する
+            } catch(const std::exception& e) {
+              CUTIL_PRINTF("[cutil::json_unquote] invalid \\u escape '%s': %s\n", s.substr(i + 1, 4).c_str(), e.what());
+            }
             i += 4;
           }
           break;
@@ -576,7 +588,10 @@ void json_floats_from_array(const std::string& text, float* out, size_t n) {
   for(size_t i = 0; i < n && i < parts.size(); i++) {
     try {
       out[i] = static_cast<float>(std::stod(parts[i]));
-    } catch(...) { out[i] = 0.0f; } // 数値として読めない要素は0として扱う
+    } catch(const std::exception& e) {
+      CUTIL_PRINTF("[cutil::json_floats_from_array] '%s' is not a number: %s\n", parts[i].c_str(), e.what());
+      out[i] = 0.0f; // 数値として読めない要素は0として扱う
+    }
   }
 }
 

@@ -18,6 +18,14 @@
 #include <cutil/vec.hpp>
 #include <cutil/vector.hpp>
 
+// 利用側で先に定義しておけば既存ロガーへ差し替えられる(壊れた入力を検出した際のエラー出力先)。
+#ifndef CUTIL_PRINTF
+#define CUTIL_PRINTF(...) std::fprintf(stderr, __VA_ARGS__)
+#endif
+#ifndef CUTIL_PERROR
+#define CUTIL_PERROR(msg) std::perror(msg)
+#endif
+
 namespace cutil {
 
 enum class PropType : uint16_t {

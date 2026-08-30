@@ -174,7 +174,10 @@ inline bool prop_dump_json(const Prop& prop, std::string& out) {
 // load: JSON文字列からPropを復元する。フィールドのtype_idをPropInfoRegistryで引き直しfrom_json()で値を再構築する。
 inline bool prop_load_json(Prop& prop, const std::string& text) {
   std::string trimmed = detail::json_trim(text);
-  if(trimmed.size() < 2 || trimmed.front() != '{' || trimmed.back() != '}') return false;
+  if(trimmed.size() < 2 || trimmed.front() != '{' || trimmed.back() != '}') {
+    CUTIL_PRINTF("[cutil::prop_load_json] not a JSON object (missing surrounding '{' '}')\n");
+    return false;
+  }
   try {
     for(const auto& part : detail::json_split_top_level(text)) {
       std::string field_name, field_body;
@@ -202,8 +205,9 @@ inline bool prop_load_json(Prop& prop, const std::string& text) {
         prop.adopt_raw_by_info(field_name.c_str(), type, storage.data());
       }
     }
-  } catch(const std::exception&) {
+  } catch(const std::exception& e) {
     // 同名フィールドが型違いで重複するなど壊れたJSON特有の状態はエラーとして扱う(set/adopt_raw_by_infoはlogic_errorを投げる)
+    CUTIL_PRINTF("[cutil::prop_load_json] %s\n", e.what());
     return false;
   }
   return true;
@@ -302,14 +306,17 @@ inline bool prop_dump_binary(const Prop& prop, std::vector<uint8_t>& out) {
 }
 
 inline bool prop_load_binary(Prop& prop, const std::vector<uint8_t>& bytes, const PropLoadFallback& fallback = nullptr) {
-  auto do_fallback = [&]() -> bool { return fallback ? fallback(prop, bytes) : false; };
+  auto do_fallback = [&](const char* why) -> bool {
+    CUTIL_PRINTF("[cutil::prop_load_binary] %s\n", why);
+    return fallback ? fallback(prop, bytes) : false;
+  };
 
-  if(bytes.size() < sizeof(PropFileHeader)) return do_fallback();
+  if(bytes.size() < sizeof(PropFileHeader)) return do_fallback("truncated: shorter than PropFileHeader");
   PropFileHeader header;
   std::memcpy(&header, bytes.data(), sizeof(header));
-  if(std::memcmp(header.magic, "CPR2", 4) != 0) return do_fallback();
-  if(header.endianness_tag != PROP_BINARY_ENDIANNESS_TAG) return do_fallback();
-  if(header.format_version != PROP_BINARY_FORMAT_VERSION) return do_fallback();
+  if(std::memcmp(header.magic, "CPR2", 4) != 0) return do_fallback("bad magic (not a CPR2 file)");
+  if(header.endianness_tag != PROP_BINARY_ENDIANNESS_TAG) return do_fallback("endianness tag mismatch");
+  if(header.format_version != PROP_BINARY_FORMAT_VERSION) return do_fallback("unsupported format_version");
 
   size_t cursor = sizeof(PropFileHeader);
 
@@ -322,11 +329,11 @@ inline bool prop_load_binary(Prop& prop, const std::vector<uint8_t>& bytes, cons
   std::vector<LoadedSchema> schemas;
   schemas.reserve(std::min<size_t>(header.schema_count, bytes.size()));
   for(uint32_t i = 0; i < header.schema_count; i++) {
-    if(cursor + sizeof(PropSchemaEntry) > bytes.size()) return do_fallback();
+    if(cursor + sizeof(PropSchemaEntry) > bytes.size()) return do_fallback("truncated: SchemaSection entry out of range");
     LoadedSchema ls;
     std::memcpy(&ls.entry, bytes.data() + cursor, sizeof(PropSchemaEntry));
     cursor += sizeof(PropSchemaEntry);
-    if(static_cast<uint64_t>(ls.entry.field_count) * sizeof(PropSchemaFieldDesc) > bytes.size() - cursor) return do_fallback();
+    if(static_cast<uint64_t>(ls.entry.field_count) * sizeof(PropSchemaFieldDesc) > bytes.size() - cursor) return do_fallback("truncated: schema field_count exceeds remaining bytes");
     ls.fields.resize(ls.entry.field_count);
     for(uint32_t j = 0; j < ls.entry.field_count; j++) {
       std::memcpy(&ls.fields[j], bytes.data() + cursor, sizeof(PropSchemaFieldDesc));
@@ -339,7 +346,7 @@ inline bool prop_load_binary(Prop& prop, const std::vector<uint8_t>& bytes, cons
   std::vector<PropValueEntry> entries;
   entries.reserve(std::min<size_t>(header.entry_count, bytes.size()));
   for(uint32_t i = 0; i < header.entry_count; i++) {
-    if(cursor + sizeof(PropValueEntry) > bytes.size()) return do_fallback();
+    if(cursor + sizeof(PropValueEntry) > bytes.size()) return do_fallback("truncated: EntryTable entry out of range");
     PropValueEntry ve;
     std::memcpy(&ve, bytes.data() + cursor, sizeof(PropValueEntry));
     cursor += sizeof(PropValueEntry);
@@ -350,19 +357,19 @@ inline bool prop_load_binary(Prop& prop, const std::vector<uint8_t>& bytes, cons
   size_t data_block_size   = 0;
   for(const auto& e : entries) data_block_size = std::max(data_block_size, static_cast<size_t>(e.data_offset) + e.data_size);
   size_t blob_block_offset = data_block_offset + data_block_size;
-  if(blob_block_offset > bytes.size()) return do_fallback();
+  if(blob_block_offset > bytes.size()) return do_fallback("truncated: BlobBlock offset beyond end of data");
   const uint8_t* blob = bytes.data() + blob_block_offset;
   size_t blob_size    = bytes.size() - blob_block_offset;
 
   try {
     for(uint32_t i = 0; i < header.entry_count; i++) {
       const auto& ve = entries[i];
-      if(ve.schema_index >= schemas.size()) return do_fallback(); // 破損したschema_indexで範囲外参照しない
+      if(ve.schema_index >= schemas.size()) return do_fallback("corrupted: entry.schema_index out of range"); // 破損したschema_indexで範囲外参照しない
       const auto& file_schema   = schemas[ve.schema_index];
       const PropInfo* live_type = PropInfoRegistry::instance().find(file_schema.entry.type_id);
 
       size_t entry_data_offset = data_block_offset + ve.data_offset;
-      if(entry_data_offset + ve.data_size > bytes.size()) return do_fallback();
+      if(entry_data_offset + ve.data_size > bytes.size()) return do_fallback("truncated: entry data_offset/data_size out of range");
 
       if(!live_type) continue; // 現行コードに存在しない型はこのフィールドのみスキップする
 
@@ -375,7 +382,7 @@ inline bool prop_load_binary(Prop& prop, const std::vector<uint8_t>& bytes, cons
           uint32_t blob_offset = 0, blob_len = 0;
           std::memcpy(&blob_offset, bytes.data() + entry_data_offset, 4);
           std::memcpy(&blob_len, bytes.data() + entry_data_offset + 4, 4);
-          if(blob_offset + blob_len > blob_size) return do_fallback();
+          if(blob_offset + blob_len > blob_size) return do_fallback("truncated: field blob_offset/blob_len out of range");
           detail::read_value_binary(live_type, storage.data(), blob, blob_offset, blob_size);
         }
         if(live_type->klass == PropClass::Trivial) {
@@ -402,7 +409,10 @@ inline bool prop_load_binary(Prop& prop, const std::vector<uint8_t>& bytes, cons
         uint32_t blob_offset = 0, blob_len = 0;
         std::memcpy(&blob_offset, bytes.data() + entry_data_offset, 4);
         std::memcpy(&blob_len, bytes.data() + entry_data_offset + 4, 4);
-        if(blob_offset + blob_len > blob_size) continue;
+        if(blob_offset + blob_len > blob_size) {
+          CUTIL_PRINTF("[cutil::prop_load_binary] field '%s': blob_offset/blob_len out of range, skipping\n", ve.name);
+          continue;
+        }
         const uint8_t* old_blob = blob + blob_offset;
 
         for(const auto& old_f : file_schema.fields) {
@@ -416,9 +426,9 @@ inline bool prop_load_binary(Prop& prop, const std::vector<uint8_t>& bytes, cons
       }
     }
   } catch(const detail::BinaryTruncated&) {
-    return do_fallback(); // blob内の長さ/要素数フィールドが壊れており安全に読み切れなかった
-  } catch(const std::exception&) {
-    return do_fallback(); // 同名フィールドが型違いで重複するなど壊れたEntryTable特有の状態
+    return do_fallback("blob内の長さ/要素数フィールドが壊れており安全に読み切れなかった");
+  } catch(const std::exception& e) {
+    return do_fallback((std::string("EntryTable復元中に例外: ") + e.what()).c_str());
   }
 
   return true;
