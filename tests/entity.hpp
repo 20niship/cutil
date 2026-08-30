@@ -83,7 +83,13 @@ public:
   WeakPtr<Model> parent; // WeakPtr で循環参照を防止
   std::vector<Ref<Model>> children;
   Vec3f pos;
+  Vec3f scale = Vec3f(1, 1, 1);
+  Quat<float> quat;
+  Path path;
   bool visible    = false;
+  bool animate    = false;
+  Rect3D bbox;
+  Vec4f color;
   int32_t mesh_id = -1; // Meshへの参照(整数ハンドル)
 
   // Prop::dump()/load_to() 用のルール。name/positionはPOD/Str相当、
@@ -99,7 +105,13 @@ public:
       PropInfo::Field::make_ref_list<Mesh>("meshes", offsetof(Model, meshes)),
       PropInfo::Field::make_ref_list<Model>("children", offsetof(Model, children)),
       {"pos", offsetof(Model, pos), prop_info_of<Vec3f>()},
+      {"scale", offsetof(Model, scale), prop_info_of<Vec3f>()},
+      {"quat", offsetof(Model, quat), prop_info_of<Quat<float>>()},
+      {"path", offsetof(Model, path), prop_info_of<Path>()},
       {"visible", offsetof(Model, visible), prop_info_of<bool>()},
+      {"animate", offsetof(Model, animate), prop_info_of<bool>()},
+      {"bbox", offsetof(Model, bbox), prop_info_of<Rect3D>()},
+      {"color", offsetof(Model, color), prop_info_of<Vec4f>()},
       {"mesh_id", offsetof(Model, mesh_id), prop_info_of<int32_t>()},
     };
     return &rule;

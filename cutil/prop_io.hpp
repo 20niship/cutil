@@ -93,8 +93,14 @@ inline void write_value_binary(const PropInfo* type, const void* obj, std::vecto
   append_bytes(blob_out, json.data(), json.size());
 }
 
-// blob[offset..]からtypeの値をobj(未構築)へ再構築する。読み終えた次のoffsetを返す。
-inline size_t read_value_binary(const PropInfo* type, void* obj, const uint8_t* blob, size_t offset) {
+// blob内に埋め込まれた長さ/要素数はファイル由来で信用できないため、読む前に必ずblob_sizeへ収まるか確認する。収まらなければ投げる。
+struct BinaryTruncated {};
+inline void check_blob_bounds(size_t offset, size_t need, size_t blob_size) {
+  if(offset > blob_size || need > blob_size - offset) throw BinaryTruncated{};
+}
+
+// blob[offset..]からtypeの値をobj(未構築)へ再構築する。読み終えた次のoffsetを返す。範囲外読み出しはBinaryTruncatedを投げる。
+inline size_t read_value_binary(const PropInfo* type, void* obj, const uint8_t* blob, size_t offset, size_t blob_size) {
   if(!type->fields.empty()) {
     if(type->default_ctor)
       type->default_ctor(obj);
@@ -103,17 +109,19 @@ inline size_t read_value_binary(const PropInfo* type, void* obj, const uint8_t* 
     for(const auto& f : type->fields) {
       auto* fptr = reinterpret_cast<uint8_t*>(obj) + f.offset;
       if(f.type->klass == PropClass::Trivial) {
+        check_blob_bounds(offset, f.type->size, blob_size);
         std::memcpy(fptr, blob + offset, f.type->size);
         offset += f.type->size;
       } else {
         if(f.type->dtor) f.type->dtor(fptr); // default_ctorが構築した仮の値を破棄してから再構築する
-        offset = read_value_binary(f.type, fptr, blob, offset);
+        offset = read_value_binary(f.type, fptr, blob, offset, blob_size);
       }
     }
     return offset;
   }
   if(type->element_type) {
     uint32_t n = 0;
+    check_blob_bounds(offset, sizeof(n), blob_size);
     std::memcpy(&n, blob + offset, sizeof(n));
     offset += sizeof(n);
     if(type->default_ctor)
@@ -121,12 +129,13 @@ inline size_t read_value_binary(const PropInfo* type, void* obj, const uint8_t* 
     else
       std::memset(obj, 0, type->size);
     if(type->element_type->klass == PropClass::Trivial) {
+      check_blob_bounds(offset, static_cast<size_t>(n) * type->element_type->size, blob_size);
       type->seq_assign_raw(obj, blob + offset, n);
       offset += static_cast<size_t>(n) * type->element_type->size;
     } else {
       std::vector<uint8_t> elem_storage(type->element_type->size);
       for(uint32_t i = 0; i < n; i++) {
-        offset = read_value_binary(type->element_type, elem_storage.data(), blob, offset);
+        offset = read_value_binary(type->element_type, elem_storage.data(), blob, offset, blob_size);
         type->seq_push_back_copy(obj, elem_storage.data());
         if(type->element_type->dtor) type->element_type->dtor(elem_storage.data());
       }
@@ -135,8 +144,10 @@ inline size_t read_value_binary(const PropInfo* type, void* obj, const uint8_t* 
   }
   // fields/element_typeどちらも持たないIndirect/Dynamic(CustomSlot, Prop等)はfrom_json経由にフォールバックする。
   uint32_t len = 0;
+  check_blob_bounds(offset, sizeof(len), blob_size);
   std::memcpy(&len, blob + offset, sizeof(len));
   offset += sizeof(len);
+  check_blob_bounds(offset, len, blob_size);
   std::string json(reinterpret_cast<const char*>(blob + offset), len);
   offset += len;
   type->from_json(obj, json); // from_jsonはplacement-newで構築する規約
@@ -163,32 +174,41 @@ inline bool prop_dump_json(const Prop& prop, std::string& out) {
 // load: JSON文字列からPropを復元する。フィールドのtype_idをPropInfoRegistryで引き直しfrom_json()で値を再構築する。
 inline bool prop_load_json(Prop& prop, const std::string& text) {
   std::string trimmed = detail::json_trim(text);
-  if(trimmed.size() < 2 || trimmed.front() != '{' || trimmed.back() != '}') return false;
-  for(const auto& part : detail::json_split_top_level(text)) {
-    std::string field_name, field_body;
-    if(!detail::json_split_kv(part, field_name, field_body)) continue;
+  if(trimmed.size() < 2 || trimmed.front() != '{' || trimmed.back() != '}') {
+    CUTIL_PRINTF("[cutil::prop_load_json] not a JSON object (missing surrounding '{' '}')\n");
+    return false;
+  }
+  try {
+    for(const auto& part : detail::json_split_top_level(text)) {
+      std::string field_name, field_body;
+      if(!detail::json_split_kv(part, field_name, field_body)) continue;
 
-    std::string type_id, value_json;
-    for(const auto& kv : detail::json_split_top_level(field_body)) {
-      std::string k, v;
-      if(!detail::json_split_kv(kv, k, v)) continue;
-      if(k == "type_id")
-        type_id = detail::json_unquote(v);
-      else if(k == "value")
-        value_json = v;
+      std::string type_id, value_json;
+      for(const auto& kv : detail::json_split_top_level(field_body)) {
+        std::string k, v;
+        if(!detail::json_split_kv(kv, k, v)) continue;
+        if(k == "type_id")
+          type_id = detail::json_unquote(v);
+        else if(k == "value")
+          value_json = v;
+      }
+
+      const PropInfo* type = PropInfoRegistry::instance().find(type_id);
+      if(!type || !type->from_json) continue; // 現行コードに存在しない/from_json未登録の型は復元不能としてスキップする
+
+      std::vector<uint8_t> storage(type->size);
+      if(!type->from_json(storage.data(), value_json)) continue;
+
+      if(type->klass == PropClass::Trivial) {
+        prop.set_raw_pod_by_info(field_name.c_str(), type, storage.data());
+      } else {
+        prop.adopt_raw_by_info(field_name.c_str(), type, storage.data());
+      }
     }
-
-    const PropInfo* type = PropInfoRegistry::instance().find(type_id);
-    if(!type || !type->from_json) continue; // 現行コードに存在しない/from_json未登録の型は復元不能としてスキップする
-
-    std::vector<uint8_t> storage(type->size);
-    if(!type->from_json(storage.data(), value_json)) continue;
-
-    if(type->klass == PropClass::Trivial) {
-      prop.set_raw_pod_by_info(field_name.c_str(), type, storage.data());
-    } else {
-      prop.adopt_raw_by_info(field_name.c_str(), type, storage.data());
-    }
+  } catch(const std::exception& e) {
+    // 同名フィールドが型違いで重複するなど壊れたJSON特有の状態はエラーとして扱う(set/adopt_raw_by_infoはlogic_errorを投げる)
+    CUTIL_PRINTF("[cutil::prop_load_json] %s\n", e.what());
+    return false;
   }
   return true;
 }
@@ -286,14 +306,17 @@ inline bool prop_dump_binary(const Prop& prop, std::vector<uint8_t>& out) {
 }
 
 inline bool prop_load_binary(Prop& prop, const std::vector<uint8_t>& bytes, const PropLoadFallback& fallback = nullptr) {
-  auto do_fallback = [&]() -> bool { return fallback ? fallback(prop, bytes) : false; };
+  auto do_fallback = [&](const char* why) -> bool {
+    CUTIL_PRINTF("[cutil::prop_load_binary] %s\n", why);
+    return fallback ? fallback(prop, bytes) : false;
+  };
 
-  if(bytes.size() < sizeof(PropFileHeader)) return do_fallback();
+  if(bytes.size() < sizeof(PropFileHeader)) return do_fallback("truncated: shorter than PropFileHeader");
   PropFileHeader header;
   std::memcpy(&header, bytes.data(), sizeof(header));
-  if(std::memcmp(header.magic, "CPR2", 4) != 0) return do_fallback();
-  if(header.endianness_tag != PROP_BINARY_ENDIANNESS_TAG) return do_fallback();
-  if(header.format_version != PROP_BINARY_FORMAT_VERSION) return do_fallback();
+  if(std::memcmp(header.magic, "CPR2", 4) != 0) return do_fallback("bad magic (not a CPR2 file)");
+  if(header.endianness_tag != PROP_BINARY_ENDIANNESS_TAG) return do_fallback("endianness tag mismatch");
+  if(header.format_version != PROP_BINARY_FORMAT_VERSION) return do_fallback("unsupported format_version");
 
   size_t cursor = sizeof(PropFileHeader);
 
@@ -302,93 +325,110 @@ inline bool prop_load_binary(Prop& prop, const std::vector<uint8_t>& bytes, cons
     PropSchemaEntry entry;
     std::vector<PropSchemaFieldDesc> fields;
   };
-  std::vector<LoadedSchema> schemas(header.schema_count);
+  // schema_count等は壊れたファイルだと巨大値になり得るためvector(count)で先に確保せずpush_backする。
+  std::vector<LoadedSchema> schemas;
+  schemas.reserve(std::min<size_t>(header.schema_count, bytes.size()));
   for(uint32_t i = 0; i < header.schema_count; i++) {
-    if(cursor + sizeof(PropSchemaEntry) > bytes.size()) return do_fallback();
-    std::memcpy(&schemas[i].entry, bytes.data() + cursor, sizeof(PropSchemaEntry));
+    if(cursor + sizeof(PropSchemaEntry) > bytes.size()) return do_fallback("truncated: SchemaSection entry out of range");
+    LoadedSchema ls;
+    std::memcpy(&ls.entry, bytes.data() + cursor, sizeof(PropSchemaEntry));
     cursor += sizeof(PropSchemaEntry);
-    schemas[i].fields.resize(schemas[i].entry.field_count);
-    for(uint32_t j = 0; j < schemas[i].entry.field_count; j++) {
-      if(cursor + sizeof(PropSchemaFieldDesc) > bytes.size()) return do_fallback();
-      std::memcpy(&schemas[i].fields[j], bytes.data() + cursor, sizeof(PropSchemaFieldDesc));
+    if(static_cast<uint64_t>(ls.entry.field_count) * sizeof(PropSchemaFieldDesc) > bytes.size() - cursor) return do_fallback("truncated: schema field_count exceeds remaining bytes");
+    ls.fields.resize(ls.entry.field_count);
+    for(uint32_t j = 0; j < ls.entry.field_count; j++) {
+      std::memcpy(&ls.fields[j], bytes.data() + cursor, sizeof(PropSchemaFieldDesc));
       cursor += sizeof(PropSchemaFieldDesc);
     }
+    schemas.push_back(std::move(ls));
   }
 
   // EntryTable読み込み
-  std::vector<PropValueEntry> entries(header.entry_count);
+  std::vector<PropValueEntry> entries;
+  entries.reserve(std::min<size_t>(header.entry_count, bytes.size()));
   for(uint32_t i = 0; i < header.entry_count; i++) {
-    if(cursor + sizeof(PropValueEntry) > bytes.size()) return do_fallback();
-    std::memcpy(&entries[i], bytes.data() + cursor, sizeof(PropValueEntry));
+    if(cursor + sizeof(PropValueEntry) > bytes.size()) return do_fallback("truncated: EntryTable entry out of range");
+    PropValueEntry ve;
+    std::memcpy(&ve, bytes.data() + cursor, sizeof(PropValueEntry));
     cursor += sizeof(PropValueEntry);
+    entries.push_back(ve);
   }
 
   size_t data_block_offset = cursor;
   size_t data_block_size   = 0;
   for(const auto& e : entries) data_block_size = std::max(data_block_size, static_cast<size_t>(e.data_offset) + e.data_size);
   size_t blob_block_offset = data_block_offset + data_block_size;
-  if(blob_block_offset > bytes.size()) return do_fallback();
+  if(blob_block_offset > bytes.size()) return do_fallback("truncated: BlobBlock offset beyond end of data");
   const uint8_t* blob = bytes.data() + blob_block_offset;
   size_t blob_size    = bytes.size() - blob_block_offset;
 
-  for(uint32_t i = 0; i < header.entry_count; i++) {
-    const auto& ve            = entries[i];
-    const auto& file_schema   = schemas[ve.schema_index];
-    const PropInfo* live_type = PropInfoRegistry::instance().find(file_schema.entry.type_id);
+  try {
+    for(uint32_t i = 0; i < header.entry_count; i++) {
+      const auto& ve = entries[i];
+      if(ve.schema_index >= schemas.size()) return do_fallback("corrupted: entry.schema_index out of range"); // 破損したschema_indexで範囲外参照しない
+      const auto& file_schema   = schemas[ve.schema_index];
+      const PropInfo* live_type = PropInfoRegistry::instance().find(file_schema.entry.type_id);
 
-    size_t entry_data_offset = data_block_offset + ve.data_offset;
-    if(entry_data_offset + ve.data_size > bytes.size()) return do_fallback();
+      size_t entry_data_offset = data_block_offset + ve.data_offset;
+      if(entry_data_offset + ve.data_size > bytes.size()) return do_fallback("truncated: entry data_offset/data_size out of range");
 
-    if(!live_type) continue; // 現行コードに存在しない型はこのフィールドのみスキップする
+      if(!live_type) continue; // 現行コードに存在しない型はこのフィールドのみスキップする
 
-    if(live_type->version == file_schema.entry.version) {
-      // fast path: 現行スキーマとバイト完全互換なのでそのまま読み込む
-      std::vector<uint8_t> storage(live_type->size);
-      if(live_type->klass == PropClass::Trivial) {
+      if(live_type->version == file_schema.entry.version) {
+        // fast path: 現行スキーマとバイト完全互換なのでそのまま読み込む
+        std::vector<uint8_t> storage(live_type->size);
+        if(live_type->klass == PropClass::Trivial) {
+          std::memcpy(storage.data(), bytes.data() + entry_data_offset, live_type->size);
+        } else {
+          uint32_t blob_offset = 0, blob_len = 0;
+          std::memcpy(&blob_offset, bytes.data() + entry_data_offset, 4);
+          std::memcpy(&blob_len, bytes.data() + entry_data_offset + 4, 4);
+          if(blob_offset + blob_len > blob_size) return do_fallback("truncated: field blob_offset/blob_len out of range");
+          detail::read_value_binary(live_type, storage.data(), blob, blob_offset, blob_size);
+        }
+        if(live_type->klass == PropClass::Trivial) {
+          prop.set_raw_pod_by_info(ve.name, live_type, storage.data());
+        } else {
+          prop.adopt_raw_by_info(ve.name, live_type, storage.data());
+        }
+      } else if(live_type->klass == PropClass::Trivial) {
+        // Trivial型はversion不一致でもバイナリレイアウト(size)が変わっていなければそのままmemcpyで復元できる。
+        if(file_schema.entry.size != live_type->size) continue;
+        std::vector<uint8_t> storage(live_type->size);
         std::memcpy(storage.data(), bytes.data() + entry_data_offset, live_type->size);
+        prop.set_raw_pod_by_info(ve.name, live_type, storage.data());
       } else {
+        // slow path(型/エントリ単位のフォールバック): 旧schemaのTrivialフィールドのみ名前一致で復元、Indirect/Dynamicの変更は次段階として復元不能でスキップする。
+        if(file_schema.fields.empty() || live_type->fields.empty()) continue;
+
+        std::vector<uint8_t> storage(live_type->size);
+        if(live_type->default_ctor)
+          live_type->default_ctor(storage.data());
+        else
+          std::memset(storage.data(), 0, live_type->size);
+
         uint32_t blob_offset = 0, blob_len = 0;
         std::memcpy(&blob_offset, bytes.data() + entry_data_offset, 4);
         std::memcpy(&blob_len, bytes.data() + entry_data_offset + 4, 4);
-        if(blob_offset + blob_len > blob_size) return do_fallback();
-        detail::read_value_binary(live_type, storage.data(), blob, blob_offset);
-      }
-      if(live_type->klass == PropClass::Trivial) {
-        prop.set_raw_pod_by_info(ve.name, live_type, storage.data());
-      } else {
+        if(blob_offset + blob_len > blob_size) {
+          CUTIL_PRINTF("[cutil::prop_load_binary] field '%s': blob_offset/blob_len out of range, skipping\n", ve.name);
+          continue;
+        }
+        const uint8_t* old_blob = blob + blob_offset;
+
+        for(const auto& old_f : file_schema.fields) {
+          const PropInfo::Field* cur_f = live_type->find_field(old_f.name);
+          if(!cur_f || cur_f->type->klass != PropClass::Trivial) continue;
+          if(std::strncmp(cur_f->type->id, old_f.type_id, sizeof(old_f.type_id)) != 0) continue;
+          if(old_f.offset + old_f.size > blob_len) continue;
+          std::memcpy(storage.data() + cur_f->offset, old_blob + old_f.offset, old_f.size);
+        }
         prop.adopt_raw_by_info(ve.name, live_type, storage.data());
       }
-    } else if(live_type->klass == PropClass::Trivial) {
-      // Trivial型はversion不一致でもバイナリレイアウト(size)が変わっていなければそのままmemcpyで復元できる。
-      if(file_schema.entry.size != live_type->size) continue;
-      std::vector<uint8_t> storage(live_type->size);
-      std::memcpy(storage.data(), bytes.data() + entry_data_offset, live_type->size);
-      prop.set_raw_pod_by_info(ve.name, live_type, storage.data());
-    } else {
-      // slow path(型/エントリ単位のフォールバック): 旧schemaのTrivialフィールドのみ名前一致で復元、Indirect/Dynamicの変更は次段階として復元不能でスキップする。
-      if(file_schema.fields.empty() || live_type->fields.empty()) continue;
-
-      std::vector<uint8_t> storage(live_type->size);
-      if(live_type->default_ctor)
-        live_type->default_ctor(storage.data());
-      else
-        std::memset(storage.data(), 0, live_type->size);
-
-      uint32_t blob_offset = 0, blob_len = 0;
-      std::memcpy(&blob_offset, bytes.data() + entry_data_offset, 4);
-      std::memcpy(&blob_len, bytes.data() + entry_data_offset + 4, 4);
-      if(blob_offset + blob_len > blob_size) continue;
-      const uint8_t* old_blob = blob + blob_offset;
-
-      for(const auto& old_f : file_schema.fields) {
-        const PropInfo::Field* cur_f = live_type->find_field(old_f.name);
-        if(!cur_f || cur_f->type->klass != PropClass::Trivial) continue;
-        if(std::strncmp(cur_f->type->id, old_f.type_id, sizeof(old_f.type_id)) != 0) continue;
-        if(old_f.offset + old_f.size > blob_len) continue;
-        std::memcpy(storage.data() + cur_f->offset, old_blob + old_f.offset, old_f.size);
-      }
-      prop.adopt_raw_by_info(ve.name, live_type, storage.data());
     }
+  } catch(const detail::BinaryTruncated&) {
+    return do_fallback("blob内の長さ/要素数フィールドが壊れており安全に読み切れなかった");
+  } catch(const std::exception& e) {
+    return do_fallback((std::string("EntryTable復元中に例外: ") + e.what()).c_str());
   }
 
   return true;

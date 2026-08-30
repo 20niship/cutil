@@ -29,9 +29,14 @@ const PropInfo* PropInfoOf<int32_t>::get() {
     p.align     = alignof(int32_t);
     p.to_json   = [](const void* obj) -> std::string { return std::to_string(*reinterpret_cast<const int32_t*>(obj)); };
     p.from_json = [](void* obj, const std::string& text) -> bool {
-      int32_t v = static_cast<int32_t>(std::stoll(detail::json_trim(text)));
-      std::memcpy(obj, &v, sizeof(int32_t));
-      return true;
+      try {
+        int32_t v = static_cast<int32_t>(std::stoll(detail::json_trim(text)));
+        std::memcpy(obj, &v, sizeof(int32_t));
+        return true;
+      } catch(const std::exception& e) {
+        CUTIL_PRINTF("[cutil::PropInfoOf<int32_t>::from_json] '%s' is not a number: %s\n", text.c_str(), e.what());
+        return false;
+      }
     };
     return p;
   }();
@@ -47,9 +52,14 @@ const PropInfo* PropInfoOf<float>::get() {
     p.align     = alignof(float);
     p.to_json   = [](const void* obj) -> std::string { return detail::json_number(static_cast<double>(*reinterpret_cast<const float*>(obj))); };
     p.from_json = [](void* obj, const std::string& text) -> bool {
-      float v = static_cast<float>(std::stod(detail::json_trim(text)));
-      std::memcpy(obj, &v, sizeof(float));
-      return true;
+      try {
+        float v = static_cast<float>(std::stod(detail::json_trim(text)));
+        std::memcpy(obj, &v, sizeof(float));
+        return true;
+      } catch(const std::exception& e) {
+        CUTIL_PRINTF("[cutil::PropInfoOf<float>::from_json] '%s' is not a number: %s\n", text.c_str(), e.what());
+        return false;
+      }
     };
     return p;
   }();
@@ -65,9 +75,14 @@ const PropInfo* PropInfoOf<uint8_t>::get() {
     p.align     = alignof(uint8_t);
     p.to_json   = [](const void* obj) -> std::string { return std::to_string(*reinterpret_cast<const uint8_t*>(obj)); };
     p.from_json = [](void* obj, const std::string& text) -> bool {
-      uint8_t v = static_cast<uint8_t>(std::stoi(detail::json_trim(text)));
-      std::memcpy(obj, &v, sizeof(uint8_t));
-      return true;
+      try {
+        uint8_t v = static_cast<uint8_t>(std::stoi(detail::json_trim(text)));
+        std::memcpy(obj, &v, sizeof(uint8_t));
+        return true;
+      } catch(const std::exception& e) {
+        CUTIL_PRINTF("[cutil::PropInfoOf<uint8_t>::from_json] '%s' is not a number: %s\n", text.c_str(), e.what());
+        return false;
+      }
     };
     return p;
   }();
@@ -260,7 +275,15 @@ const PropInfo* PropInfoOf<std::vector<uint8_t>>::get() {
     };
     p.from_json = [](void* obj, const std::string& text) -> bool {
       auto* v = new(obj) std::vector<uint8_t>();
-      for(const auto& part : detail::json_split_top_level(text)) v->push_back(static_cast<uint8_t>(std::stoi(part)));
+      for(const auto& part : detail::json_split_top_level(text)) {
+        try {
+          v->push_back(static_cast<uint8_t>(std::stoi(part)));
+        } catch(const std::exception& e) {
+          CUTIL_PRINTF("[cutil::PropInfoOf<vector<uint8_t>>::from_json] '%s' is not a number: %s\n", part.c_str(), e.what());
+          v->~vector(); // 既にplacement-newした分を破棄してから失敗を返す
+          return false;
+        }
+      }
       return true;
     };
     return p;
@@ -473,8 +496,12 @@ std::string json_unquote(const std::string& s) {
         case 'f': out += '\f'; break;
         case 'u':
           if(i + 4 < s.size()) {
-            int code = std::stoi(s.substr(i + 1, 4), nullptr, 16); // BMP内ASCII相当のみを想定した簡易デコード
-            out += static_cast<char>(code);
+            try {
+              int code = std::stoi(s.substr(i + 1, 4), nullptr, 16); // BMP内ASCII相当のみを想定した簡易デコード
+              out += static_cast<char>(code);
+            } catch(const std::exception& e) {
+              CUTIL_PRINTF("[cutil::json_unquote] invalid \\u escape '%s': %s\n", s.substr(i + 1, 4).c_str(), e.what());
+            }
             i += 4;
           }
           break;
@@ -558,7 +585,14 @@ std::string json_array_of_floats(const float* data, size_t n) {
 }
 void json_floats_from_array(const std::string& text, float* out, size_t n) {
   auto parts = json_split_top_level(text);
-  for(size_t i = 0; i < n && i < parts.size(); i++) out[i] = static_cast<float>(std::stod(parts[i]));
+  for(size_t i = 0; i < n && i < parts.size(); i++) {
+    try {
+      out[i] = static_cast<float>(std::stod(parts[i]));
+    } catch(const std::exception& e) {
+      CUTIL_PRINTF("[cutil::json_floats_from_array] '%s' is not a number: %s\n", parts[i].c_str(), e.what());
+      out[i] = 0.0f; // 数値として読めない要素は0として扱う
+    }
+  }
 }
 
 // element_type/seq_*アクセサだけを頼りに任意コンテナ型をJSON化する共通実装(uiVector<T>/std::vector<T>が共有する)。
