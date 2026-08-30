@@ -1,52 +1,85 @@
-# cutil
+<h1> cutil -- C++ utility header library</h1>
 
-C++ utility header library
+- [Features](#features)
+- [ビルド](#ビルド)
+- [Ref\<T\> / WeakPtr\<T\> / enable\_ref\_from\_this\<T\>](#reft--weakptrt--enable_ref_from_thist)
+- [Prop / PropInfo](#prop--propinfo)
+- [Vec / Mat / Quat](#vec--mat--quat)
+- [Str / Path](#str--path)
+- [Range / Rect / Rect3D](#range--rect--rect3d)
+- [dictionary / hash\_map / variant](#dictionary--hash_map--variant)
+- [ObjectPool\<T\>](#objectpoolt)
+- [Octree](#octree)
+- [Color / logger](#color--logger)
+
 
 ## Features
 
-- **Ref<T>** - std::shared_ptr相当のスマートポインタ
-- **WeakPtr<T>** - std::weak_ptr相当の弱参照
-- **enable_ref_from_this<T>** - std::enable_shared_from_this相当
-- **nanobind統合** - Pythonバインディングとの完全互換性
 - ヘッダーオンリー実装
-- スレッドセーフな参照カウント
+- **Ref<T> / WeakPtr<T> / enable_ref_from_this<T>** - std::shared_ptr/weak_ptr相当のスマートポインタ、nanobind完全互換
+- **Prop / PropInfo** - offsetofルールベースのリフレクション。任意構造体のdump/load_to、バイナリ/JSONシリアライズ
+- **Vec / Mat / Quat** - GLM/Godot風APIのN次元ベクトル・行列・クォータニオン（SSE2 SIMD対応）
+- **Str / Path** - SSO付き文字列、ファイルパス型
+- **Range / Rect / Rect3D** - 2D/3D幾何プリミティブ
+- **dictionary / hash_map / variant** - 汎用コンテナ
+- **ObjectPool** - チャンク連結リストによるオブジェクトプール
+- **Octree** - 空間分割木
+- **Color / logger** - 補助ユーティリティ
 
-## Ref<T> - Smart Pointer
+## ビルド
 
-`cutil::Ref<T>`はC++の`std::shared_ptr<T>`と同等の機能を提供するスマートポインタです。
+CMakeでヘッダーオンリーライブラリとして構成。`include`ディレクトリに`cutil/`を追加するだけでも使用可能。
 
-### 基本的な使用法
+```bash
+cmake -B build
+cmake --build build
+```
+
+テスト実行（doctest使用、`tests/`配下）:
+
+```bash
+cd build
+ctest --output-on-failure
+# もしくは直接実行
+./tests/tests_main
+```
+
+## Ref&lt;T&gt; / WeakPtr&lt;T&gt; / enable_ref_from_this&lt;T&gt;
+
+`std::shared_ptr`/`std::weak_ptr`/`enable_shared_from_this`相当のスマートポインタ。nanobindのホルダータイプとしても使用可能。
+
+<details>
+<summary>使用例を見る</summary>
+
+`cutil::Ref<T>`は`std::shared_ptr<T>`と同等の機能を提供するスマートポインタ。`WeakPtr<T>`で循環参照を防止できる。
 
 ```cpp
 #include <cutil/ref.hpp>
 
 using namespace cutil;
 
-class MyClass {
+class MyClass : public enable_ref_from_this<MyClass> {
 public:
     int id;
     MyClass(int i) : id(i) {}
+
+    Ref<MyClass> get_self() { return ref_from_this(); }
 };
 
 int main() {
-    // 作成
     Ref<MyClass> obj = make_ref<MyClass>(42);
-    
-    // コピー（参照カウント増加）
-    Ref<MyClass> obj2 = obj;
-    
-    // 参照カウント確認
-    std::cout << obj.use_count();  // 2
-    
-    // ムーブ（効率的な移動）
-    Ref<MyClass> obj3 = std::move(obj2);
-    
-    // スコープ外で自動破棄
+    Ref<MyClass> obj2 = obj;              // 参照カウント増加
+    std::cout << obj.use_count();         // 2
+
+    WeakPtr<MyClass> weak = obj;          // 弱参照（循環参照を防止）
+    if (!weak.expired()) {
+        Ref<MyClass> locked = weak.lock();
+    }
+
+    Ref<MyClass> obj3 = std::move(obj2);  // ムーブ
     return 0;
 }
 ```
-
-### 主な機能
 
 | メソッド | 説明 |
 |---------|------|
@@ -55,58 +88,9 @@ int main() {
 | `get()` | 生ポインタを取得 |
 | `reset()` | 参照をリセット |
 | `swap()` | ポインタを交換 |
+| `weak.expired()` / `weak.lock()` | 有効期限チェック / Ref\<T\>へロック |
 
-## WeakPtr<T> - Weak Reference
-
-`WeakPtr<T>`は`Ref<T>`への弱参照を保持し、循環参照を防ぎます。
-
-```cpp
-Ref<MyClass> obj = make_ref<MyClass>(42);
-
-// 弱参照を作成
-WeakPtr<MyClass> weak = obj;
-
-// オブジェクトが生きているか確認
-if (!weak.expired()) {
-    // Ref<T>にロック
-    Ref<MyClass> locked = weak.lock();
-    if (locked) {
-        // 安全に使用可能
-    }
-}
-```
-
-## enable_ref_from_this<T>
-
-クラスが自身への`Ref<T>`を安全に取得できるようにします。
-
-```cpp
-class MyClass : public enable_ref_from_this<MyClass> {
-public:
-    Ref<MyClass> get_self() {
-        return ref_from_this();
-    }
-    
-    WeakPtr<MyClass> get_weak() {
-        return weak_from_this();
-    }
-};
-
-int main() {
-    Ref<MyClass> obj = make_ref<MyClass>();
-    
-    // メンバ関数から自身の参照を取得
-    Ref<MyClass> self = obj->get_self();
-    
-    return 0;
-}
-```
-
-## nanobind統合
-
-`Ref<T>`はnanobindと完全に互換性があり、Pythonバインディングのホルダータイプとして使用できます。
-
-### 使用例
+nanobind統合例:
 
 ```cpp
 #include <nanobind/nanobind.h>
@@ -114,58 +98,227 @@ int main() {
 
 namespace nb = nanobind;
 
-class MyClass {
-public:
-    int id;
-    MyClass(int i) : id(i) {}
-};
-
 NB_MODULE(my_module, m) {
-    nb::class_<MyClass, Ref<MyClass>>(m, "MyClass")
+    nb::class_<MyClass, cutil::Ref<MyClass>>(m, "MyClass")
         .def(nb::init<int>())
         .def_rw("id", &MyClass::id);
 }
 ```
 
-### nanobind互換性
+- **既知の制限**: `enable_ref_from_this<T>`を使うクラスは`make_ref<T>()`で生成する必要がある
 
-| 機能 | std::shared_ptr | Ref<T> |
-|------|-----------------|--------|
-| 参照カウント | ✓ | ✓ |
-| WeakPtr相当 | std::weak_ptr | WeakPtr<T> |
-| enable_shared_from_this相当 | ✓ | enable_ref_from_this<T> |
-| nanobindホルダー | ✓ | ✓ |
-| カスタムデリータ | ✓ | ✓ |
-| ムーブセマンティクス | ✓ | ✓ |
+</details>
 
-### nanobindメモリ管理
+## Prop / PropInfo
 
-- **C++→Python**：Ref<T>は自動的にPythonに変換され、Python破棄時に参照カウント減少
-- **Python→C++**：Pythonから渡されたオブジェクトは自動的にRef<T>に変換
-- **自動デリータ**：make_ref<T>()で生成されたオブジェクトは自動削除
+offsetofルールベースのリフレクションシステム。任意のC++構造体をキー付きの動的な値コンテナ`Prop`へdump/load_toでき、バイナリ/JSON形式へシリアライズできる。
 
-## テスト
+<details>
+<summary>使用例を見る</summary>
 
-```bash
-cmake -B build
-cmake --build build
-cd build
-ctest --output-on-failure
+`Prop`はキー付きの動的な値コンテナ、`PropInfo`はoffsetofベースの構造体スキーマ。
+
+```cpp
+#include <cutil/prop.hpp>
+#include <cutil/prop_io.hpp>
+
+using namespace cutil;
+
+// 動的な値コンテナとして使う
+Prop p;
+p.set<float>("speed", 3.5f);
+p.set<Vec3f>("pos", Vec3f(1, 2, 3));
+float speed = p.get<float>("speed");
+
+// バイナリ/JSONへシリアライズ
+std::vector<uint8_t> bytes;
+prop_dump_binary(p, bytes);
+Prop restored;
+prop_load_binary(restored, bytes);
+
+std::string json;
+prop_dump_json(p, json);
 ```
 
-テスト結果：
-- **76個のテストケース**
-- **206個のアサーション**
-- **100% 成功** ✅
+外部構造体をoffsetofルールでdump/load_toする例:
 
-## 実装
+```cpp
+struct Model3D { Vec3f pos; Str name; bool visible = false; };
 
-- `cutil/ref.hpp` - Ref<T>, WeakPtr<T>, enable_ref_from_this<T>の完全実装
-- `cutil/ref_nanobind.hpp` - nanobind統合用ヘッダー
-- `tests/test_ref.cpp` - 基本機能テスト（58テスト）
-- `tests/test_ref_integration.cpp` - nanobind統合テスト（18テスト）
+const PropInfo& Model3DInfo() {
+  static const PropInfo rule = {
+    {"pos",     offsetof(Model3D, pos),     prop_info_of<Vec3f>()},
+    {"name",    offsetof(Model3D, name),    prop_info_of<Str>()},
+    {"visible", offsetof(Model3D, visible), prop_info_of<bool>()},
+  };
+  return rule;
+}
 
-## 既知の制限事項
+Model3D a;
+Prop p;
+p.dump(&a, &Model3DInfo());   // 構造体 → Prop
+Model3D b;
+p.load_to(&b, &Model3DInfo()); // Prop → 構造体
+```
 
-- enable_ref_from_this<T>を使用するクラスは`make_ref<T>()`で生成される必要があります
-- WeakPtr<T>は有効期限チェック（`expired()`）が推奨です
+- 壊れたバイナリ/JSONを読み込んでもクラッシュせず安全に失敗するよう設計（`tests/test_prop_fuzz.cpp`でfuzzテスト済み）
+
+</details>
+
+## Vec / Mat / Quat
+
+GLM/Godot風APIのN次元ベクトル・行列・クォータニオン。SSE2 SIMDに対応。
+
+<details>
+<summary>使用例を見る</summary>
+
+`NVec<N, T>`はN次元ベクトル（`Vec3f`, `Vec4f`等はエイリアス）、`Mat<Rows, Cols, T>`は行列、`Quat<T>`はクォータニオン。
+
+```cpp
+#include <cutil/vec.hpp>
+#include <cutil/mat.hpp>
+#include <cutil/quaternion.hpp>
+
+using namespace cutil;
+
+Vec3f a(1, 2, 3), b(4, 5, 6);
+Vec3f c = a + b * 2.0f;
+float d = dot(a, b);
+Vec3f n = normalize(a);
+
+Mat4f m = Mat4f::identity();
+
+Quat<float> q = Quat<float>::from_axis_angle(Vec3f(0, 1, 0), 3.14 / 2);
+```
+
+</details>
+
+## Str / Path
+
+SSO（Small String Optimization）付き文字列型と、ファイルパス操作用の型。
+
+<details>
+<summary>使用例を見る</summary>
+
+```cpp
+#include <cutil/string.hpp>
+#include <cutil/path.hpp>
+
+using namespace cutil;
+
+Str s("hello");
+s += " world";
+
+Path p("assets/model.fbx");
+Str ext = p.extension();     // ".fbx"
+Str name = p.filename();     // "model.fbx"
+Path dir = p.parent();       // "assets"
+```
+
+</details>
+
+## Range / Rect / Rect3D
+
+2D/3D向けの範囲・矩形・AABB（軸並行境界ボックス）。
+
+<details>
+<summary>使用例を見る</summary>
+
+```cpp
+#include <cutil/rect.hpp>
+#include <cutil/rect3d.hpp>
+
+using namespace cutil;
+
+Range r(0, 10);
+Rect rect(0, 1, 0, 1);           // xmin, xmax, ymin, ymax
+Rect3D bbox(Vec3f(0, 0, 0), Vec3f(1, 1, 1)); // min, max
+```
+
+</details>
+
+## dictionary / hash_map / variant
+
+文字列キーの辞書、カスタムハッシュマップ、型安全なUnion型といった汎用コンテナ。
+
+<details>
+<summary>使用例を見る</summary>
+
+`dictionary<Value>`は文字列キーの辞書、`hash_map<Key, Value>`はカスタムハッシュマップ、`variant<Types...>`は`std::variant`相当。
+
+```cpp
+#include <cutil/dictionary.hpp>
+#include <cutil/hash_map.hpp>
+#include <cutil/variant.hpp>
+
+using namespace cutil;
+
+dictionary<int> d;
+d.insert("hp", 100);
+if (d.contains("hp")) { /* ... */ }
+
+hash_map<std::string, int> hm;
+hm["score"] = 42;
+
+variant<int, float, std::string> v(3.14f);
+```
+
+</details>
+
+## ObjectPool&lt;T&gt;
+
+チャンク連結リスト構造のオブジェクトプール。`create()`で`Ref<T>`を返し、参照が全て解放されるとスロットがプールへ返却される。
+
+<details>
+<summary>使用例を見る</summary>
+
+```cpp
+#include <cutil/pool.hpp>
+
+using namespace cutil;
+
+ObjectPool<MyClass, 64> pool;
+Ref<MyClass> obj = pool.create(42); // コンストラクタ引数を転送
+```
+
+- **注意**: `ObjectPool`はそこから生成した全`Ref<T>`より長生きしなければならない
+
+</details>
+
+## Octree
+
+固定深度のボクセル空間分割木。近傍探索・範囲探索用。
+
+<details>
+<summary>使用例を見る</summary>
+
+```cpp
+#include <cutil/octree.hpp>
+
+using namespace cutil;
+
+Octree2<MyPointData> tree;
+tree.setVolume(0, 100, 0, 100, 0, 100);
+```
+
+</details>
+
+## Color / logger
+
+RGB⇔HSV変換などの色空間ヘルパーと、レベル付きログマクロ。
+
+<details>
+<summary>使用例を見る</summary>
+
+```cpp
+#include <cutil/color.hpp>
+#include <cutil/logger.hpp>
+
+double hue = cutil::RGB2H(Vector3b(255, 0, 0));
+
+LOGI << "info message";
+LOGW << "warning message";
+LOGE << "error message";
+```
+
+</details>
