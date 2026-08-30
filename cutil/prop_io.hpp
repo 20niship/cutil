@@ -415,12 +415,30 @@ inline bool prop_load_binary(Prop& prop, const std::vector<uint8_t>& bytes, cons
         }
         const uint8_t* old_blob = blob + blob_offset;
 
+        // old_f.offsetはstruct offsetofでありblob内の実位置とは異なるため、old_cursorで逐次読み進める。
+        size_t old_cursor = 0;
         for(const auto& old_f : file_schema.fields) {
+          const PropInfo* old_field_type = PropInfoRegistry::instance().find(old_f.type_id);
+          if(!old_field_type) {
+            CUTIL_PRINTF("[cutil::prop_load_binary] field '%s': sub-field type '%s' no longer registered, cannot skip remaining fields\n", ve.name, old_f.type_id);
+            break; // 型が消えており以降のバイト位置を計算できないため打ち切る(既に読めた分は活かす)
+          }
           const PropInfo::Field* cur_f = live_type->find_field(old_f.name);
-          if(!cur_f || cur_f->type->klass != PropClass::Trivial) continue;
-          if(std::strncmp(cur_f->type->id, old_f.type_id, sizeof(old_f.type_id)) != 0) continue;
-          if(old_f.offset + old_f.size > blob_len) continue;
-          std::memcpy(storage.data() + cur_f->offset, old_blob + old_f.offset, old_f.size);
+          bool wants_value             = cur_f && cur_f->type == old_field_type;
+
+          if(old_field_type->klass == PropClass::Trivial) {
+            detail::check_blob_bounds(old_cursor, old_field_type->size, blob_len);
+            if(wants_value) std::memcpy(storage.data() + cur_f->offset, old_blob + old_cursor, old_field_type->size);
+            old_cursor += old_field_type->size;
+          } else {
+            std::vector<uint8_t> tmp(old_field_type->size);
+            old_cursor = detail::read_value_binary(old_field_type, tmp.data(), old_blob, old_cursor, blob_len);
+            if(wants_value) {
+              if(cur_f->type->dtor) cur_f->type->dtor(storage.data() + cur_f->offset);
+              cur_f->type->copy_ctor(storage.data() + cur_f->offset, tmp.data());
+            }
+            if(old_field_type->dtor) old_field_type->dtor(tmp.data());
+          }
         }
         prop.adopt_raw_by_info(ve.name, live_type, storage.data());
       }

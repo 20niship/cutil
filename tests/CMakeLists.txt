@@ -27,6 +27,7 @@ add_executable(tests_main
     test_prop_json.cpp
     test_prop_pointer_binary.cpp
     test_prop_fuzz.cpp
+    test_prop_version_fallback.cpp
     cutil_impl.cpp
 )
 
